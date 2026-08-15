@@ -93,15 +93,16 @@ hard way.
 
 ## What's in progress right now — Epic 3
 
-**The admin side of Epic 3 is done: backend through Api through the Admin↔API pattern
-through Leaflet through the actual Razor pages, committed and pushed, verified end-to-end
-in a real browser against the live API and DB — an admin really can create a market, draw
-its service polygon and save it today.** Tasks #24-#31 (below) are done. What's left is
-the customer app (#32) and one final proof pass (#33) that the whole thing works through
-a customer-facing surface too, not just the admin side and direct API calls. The `.col-2`
-layout bug flagged under #30 is still open — it wasn't blocking (verification worked
-around it with a temporary CSS override) but it's still there for whoever next touches
-`MarketDetail.razor` or the `Dashboard`.
+**Both ends of Epic 3 are done: an admin can create a market, draw its service polygon
+and save it, and a customer screen calls the real eligibility check — backend through
+Api through the Admin↔API pattern through Leaflet through the Razor pages, and
+separately the customer app's own address screen, all committed and pushed, all verified
+against the live API and DB.** Tasks #24-#32 (below) are done. What's left is #33: one
+final pass confirming the exit criteria end-to-end in a single run rather than as
+separately-verified pieces (admin draws → customer app itself, not a Dart test script,
+sees the result). The `.col-2` layout bug flagged under #30 is still open — it wasn't
+blocking (verification worked around it with a temporary CSS override) but it's still
+there for whoever next touches `MarketDetail.razor` or the `Dashboard`.
 
 ### Epic 3 scope (from the plan)
 
@@ -287,14 +288,30 @@ persists there between sessions, this file is the source of truth):
    reliable automation — use the toolbar's `a[title="Finish drawing"]` link instead; (2)
    a combined multi-step script had a timing race clicking through modals back-to-back.
    No application code changed for either.
-9. **#32 Customer app address + eligibility** — lower priority than the admin-side work
-   for satisfying the exit criteria (the exit criteria's polygon-drawing half is entirely
-   admin-side). A real screen calling the eligibility endpoint (`MarketEligibilityService`
-   → `#28`'s customer-facing endpoint) is required; whether it's a full interactive
-   map-pin picker (`flutter_map` — the Flutter/OSM equivalent of Leaflet, no API key
-   needed, consistent with avoiding Google Maps billing setup — was the leaning, not yet
-   decided/started) or a simpler working form is still open. Don't let this block
-   finishing the admin side first.
+9. **#32 Customer app address + eligibility** ✅ done, committed (`e7c31af`).
+   `EligibilityPage` (`customer/lib/src/eligibility/`) calls the real
+   `POST /api/customer/markets/eligibility` endpoint via a new `EligibilityApi` +
+   `EligibilityDtos` pair kept local to the customer app (same no-shared-package
+   reasoning as Admin's own DTOs — no other app calls this endpoint). Reachable from
+   `HomePage`'s new "Check delivery eligibility" button. **Decided: latitude/longitude
+   entry, not a `flutter_map` pin-picker** — the plan explicitly allowed a simpler form
+   for v1, and a real map dependency + permissions + gesture handling is separable work;
+   revisit if/when the customer app gets a proper address-entry flow. Fields default to
+   Manila's coordinates so the form is never blank.
+
+   **Verified against the real running API**, not just `flutter analyze` (which is
+   clean) — Flutter's default web renderer draws to one canvas with no real DOM, so the
+   Playwright-style automation that verified the Blazor/Leaflet side of Epic 3 doesn't
+   apply here. Verification instead drove the real `AuthApi`/`SessionManager`/
+   `ApiClient` code path directly (a throwaway `flutter_test` file, deleted before
+   committing — not a permanent test): a real customer OTP login, then two live
+   eligibility calls — a point inside an admin-drawn, *active* market's polygon
+   correctly decoded `isEligible: true` with a populated `markets` list, and a point far
+   away decoded `isEligible: false` with the same refusal message #28 verified
+   server-side. Both prove the DTOs' JSON field names actually match the live API, not
+   just what the C# source says they should be. (One thing this caught along the way,
+   unrelated to the app code: `MarketEligibilityService` only matches *active* markets —
+   an `onboarding` market with a saved polygon still correctly reports no coverage.)
 10. **#33 End-to-end verification** — the actual exit criteria scenario: create a market
     in admin, draw a real polygon, save it, then hit the eligibility endpoint (or the
     customer app) with a point inside and a point outside and confirm accept/reject with
