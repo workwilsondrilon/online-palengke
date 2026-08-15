@@ -3,13 +3,14 @@ using Amazon.S3;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OnlinePalengke.Application.Abstractions;
+using OnlinePalengke.Infrastructure.Auth;
 using OnlinePalengke.Infrastructure.Persistence;
 using OnlinePalengke.Infrastructure.Persistence.Repositories;
 using OnlinePalengke.Infrastructure.Storage;
 
 namespace OnlinePalengke.Infrastructure;
 
-/// <summary>Registers database access, object storage and the clock.</summary>
+/// <summary>Registers database access, object storage, auth primitives and the clock.</summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(
@@ -20,6 +21,7 @@ public static class DependencyInjection
 
         AddDatabase(services, configuration);
         AddStorage(services, configuration);
+        AddAuth(services, configuration);
 
         services.AddSingleton<IClock, SystemClock>();
 
@@ -44,6 +46,24 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         services.AddScoped<IMediaAssetRepository, MediaAssetRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+    }
+
+    private static void AddAuth(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton<IJwtTokenService, JwtTokenService>();
+        services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+
+        // The only ISmsSender today - see LoggingSmsSender's remarks. Swap this one line
+        // for a real Semaphore/Movider adapter when one is built; nothing else changes.
+        services.AddSingleton<ISmsSender, LoggingSmsSender>();
     }
 
     private static void AddStorage(IServiceCollection services, IConfiguration configuration)
