@@ -32,7 +32,12 @@ jobs:
       partner: ${{ steps.filter.outputs.partner }}
       rider: ${{ steps.filter.outputs.rider }}
     steps:
+      # Full history, not the default shallow depth-1 clone: on a `push` event
+      # (a direct push to develop/master, not a PR) paths-filter needs to diff
+      # against github.event.before, which a depth-1 clone doesn't have.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dorny/paths-filter@v3
         id: filter
         with:

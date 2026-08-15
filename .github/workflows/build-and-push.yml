@@ -62,8 +62,11 @@ jobs:
           file: admin/src/OnlinePalengke.Api/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Distinct scope from the admin-web job below - both jobs run in
+          # parallel and would otherwise silently share (and thrash) the same
+          # default "buildkit" cache namespace despite building unrelated images.
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
 
   build-push-admin:
     name: Build & push admin-web image
@@ -98,5 +101,5 @@ jobs:
           file: admin/src/OnlinePalengke.Admin/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,mode=max,scope=admin
