@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using OnlinePalengke.Application.Auth;
+using OnlinePalengke.Application.Catalog;
+using OnlinePalengke.Application.Markets;
 using OnlinePalengke.Application.Uploads;
 
 namespace OnlinePalengke.Application;
@@ -19,6 +21,14 @@ public static class DependencyInjection
         services.AddScoped<AuthSessionFactory>();
         services.AddScoped<OtpAuthService>();
         services.AddScoped<AdminAuthService>();
+
+        services.AddScoped<CategoryService>();
+        services.AddScoped<UnitService>();
+        services.AddScoped<ItemService>();
+
+        services.AddScoped<MarketService>();
+        services.AddScoped<DeliveryWindowService>();
+        services.AddScoped<MarketEligibilityService>();
 
         return services;
     }
