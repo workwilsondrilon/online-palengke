@@ -159,8 +159,8 @@ services:
       # mapping above (that mapping is only for the host machine).
       Database__ConnectionString: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE:-onlinepalengke};User ID=${MYSQL_USER:-palengke};Password=${MYSQL_PASSWORD:-palengke};AllowUserVariables=true;UseAffectedRows=false"
       Storage__Region: ${AWS_REGION:-ap-southeast-1}
-      Storage__PublicBucket: ${STORAGE_PUBLIC_BUCKET:-palengke-dev-public}
-      Storage__PrivateBucket: ${STORAGE_PRIVATE_BUCKET:-palengke-dev-private}
+      Storage__PublicBucket: ${STORAGE_PUBLIC_BUCKET:-op-dev-public-assets}
+      Storage__PrivateBucket: ${STORAGE_PRIVATE_BUCKET:-op-dev-private}
       # Read by the AWS SDK's default credential chain. Leave blank until the
       # dev buckets are provisioned - the container still starts, only actual
       # S3 calls fail (with a normal ApiException, not a crash).
