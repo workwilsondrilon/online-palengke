@@ -5,6 +5,7 @@
        the repo-root Directory.Build.props. Do not restate them here. -->
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
     <!-- Pinned above the version Microsoft.AspNetCore.OpenApi transitively resolves.
          Microsoft.OpenApi 2.0.0 carries a known high-severity advisory

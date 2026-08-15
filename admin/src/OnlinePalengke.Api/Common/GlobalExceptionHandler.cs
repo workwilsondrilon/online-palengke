@@ -26,6 +26,7 @@ public sealed class GlobalExceptionHandler(
         var problemDetails = exception switch
         {
             ValidationException validation => BuildValidationProblem(validation),
+            TooManyRequestsException tooMany => BuildTooManyRequestsProblem(httpContext, tooMany),
             AppException app => BuildProblem(app.StatusCode, TitleFor(app.StatusCode), app.Message, app.ErrorCode),
             OperationCanceledException => null, // The caller went away; there is nobody to answer.
             _ => BuildUnexpectedProblem(),
@@ -71,6 +72,16 @@ public sealed class GlobalExceptionHandler(
         }
 
         return problem;
+    }
+
+    private static ProblemDetails BuildTooManyRequestsProblem(HttpContext httpContext, TooManyRequestsException exception)
+    {
+        if (exception.RetryAfter is { } retryAfter)
+        {
+            httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        }
+
+        return BuildProblem(exception.StatusCode, "Too many requests", exception.Message, exception.ErrorCode);
     }
 
     private static ProblemDetails BuildUnexpectedProblem() =>
