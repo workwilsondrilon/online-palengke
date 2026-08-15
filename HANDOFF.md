@@ -80,10 +80,11 @@ hard way.
 
 ## What's in progress right now — Epic 3
 
-**Backend is fully built through the Infrastructure layer, committed and pushed, verified
-against the real local database.** Tasks #24-#27 (below) are done. What's left is entirely
-the Api layer, the Admin-to-API integration pattern, Leaflet, and the customer app —
-i.e. everything that makes the built backend reachable and visible.
+**Backend is fully built and reachable over HTTP now — Domain through Api, committed and
+pushed, verified against the real local database and real JWT auth.** Tasks #24-#28
+(below) are done. What's left is the Admin-to-API integration pattern, Leaflet, and the
+customer app — i.e. everything that makes the built-and-reachable backend visible in an
+actual UI.
 
 ### Epic 3 scope (from the plan)
 
@@ -157,14 +158,22 @@ persists there between sessions, this file is the source of truth):
    verification harness itself briefly produced 4 false failures from forgetting to call
    `DapperConfiguration.Apply()` — a good reminder that a standalone check needs the same
    startup wiring as the real app, not evidence of an app bug.)
-5. **#28 Api endpoints — not started.** Admin CRUD under `/api/admin/*` for all five
-   entities (categories, units, items, markets, delivery-windows), plus a customer-facing
-   eligibility endpoint (lat/lng in, eligible markets out — `MarketEligibilityService` is
-   already built and ready to call). Look at how Epic 2's auth endpoints are wired in
-   `OnlinePalengke.Api` (minimal API style, `ApiSetup.cs` for policies) before inventing a
-   new pattern. Remember the `Naming`/`Naming.FromDbValue` exception vs. `AppException`
-   mapping already established — `AppException` subclasses map to ProblemDetails
-   automatically; anything else is a bare 500.
+5. **#28 Api endpoints** ✅ done, committed (`5f55358`). `CatalogEndpoints.cs`
+   (categories/units/items admin CRUD) and `MarketEndpoints.cs` (markets admin CRUD +
+   `PUT /{id}/service-area` + delivery-windows admin CRUD, plus the customer-facing
+   `POST /api/customer/markets/eligibility`), wired into `ApiSetup.MapApiGroups`. Follows
+   the existing minimal-API style (`AuthEndpoints.cs`/`UploadEndpoints.cs`) — `Results.Ok`
+   everywhere including POST, `AppException` subclasses already map to ProblemDetails via
+   `GlobalExceptionHandler`, no new pattern invented. **Verified end-to-end against the
+   real local database and real JWT auth**, not just a build check: logged in as the test
+   admin, created a category/unit/item, created a market, saved a real GeoJSON service
+   polygon through `PUT /service-area`, activated the market (blocked correctly until the
+   polygon existed), added a delivery window (confirmed the `TimeOnly` values round-trip
+   correctly through the API, not just the repo layer), then logged in as a test customer
+   via real OTP and hit `/api/customer/markets/eligibility` with a point inside the
+   polygon (accepted, market returned) and a point outside it (refused with the clear
+   message) — this is the literal Epic 3 exit criterion, passing against the real stack.
+   All test data cleaned up afterward via the same DELETE endpoints.
 6. **#29 AdminApiClient + admin login + Blazor auth-state — not started.** The reusable
    pattern described above. Needs a real login page (none exists yet — Admin currently
    has zero auth UI) and something implementing Blazor Server's
