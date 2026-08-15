@@ -93,14 +93,15 @@ hard way.
 
 ## What's in progress right now — Epic 3
 
-**Backend is fully built and reachable over HTTP, Admin can sign in and talk to it, and
-the map editor is real — Domain through Api through the Admin↔API integration pattern
-through Leaflet, committed and pushed, verified against the real local database, real JWT
-auth, and (for #29/#30) a real browser.** Tasks #24-#30 (below) are done. What's left is
-wiring the Razor pages to real data (#31 — also the moment to investigate the `.col-2`
-layout bug flagged under #30, since it affects the very pages #31 touches) and the
-customer app — i.e. replacing the last of `PlaceholderData` with the backend that's now
-fully reachable, authenticated, and mappable.
+**The admin side of Epic 3 is done: backend through Api through the Admin↔API pattern
+through Leaflet through the actual Razor pages, committed and pushed, verified end-to-end
+in a real browser against the live API and DB — an admin really can create a market, draw
+its service polygon and save it today.** Tasks #24-#31 (below) are done. What's left is
+the customer app (#32) and one final proof pass (#33) that the whole thing works through
+a customer-facing surface too, not just the admin side and direct API calls. The `.col-2`
+layout bug flagged under #30 is still open — it wasn't blocking (verification worked
+around it with a temporary CSS override) but it's still there for whoever next touches
+`MarketDetail.razor` or the `Dashboard`.
 
 ### Epic 3 scope (from the plan)
 
@@ -255,15 +256,37 @@ persists there between sessions, this file is the source of truth):
    materially affects usability of `.col-2` pages today (the working map from this task is
    visually squeezed into a sliver on `MarketDetail.razor`) — worth its own investigation
    before or during #31, since #31 touches these same pages anyway.
-8. **#31 Wire the Razor pages to real data — not started.** `Categories.razor`,
-   `Items.razor`, `Units.razor`, `MarketList.razor`, `MarketDetail.razor` (including
-   delivery windows) swap `PlaceholderData.X` for `AdminApiClient` calls. Keep
-   `AdminViewModels.cs`'s existing record shapes as the binding model where reasonable
-   (the Razor markup already binds their exact property names) — **but note their `Id`
-   properties are `int`; every id in the new Application-layer DTOs (`CategoryResponse`,
-   `MarketResponse`, etc.) is `long`, matching every other id in this codebase
-   (`BIGINT UNSIGNED`). Decide once whether to widen `AdminViewModels` to `long` or narrow
-   at the mapping boundary, then do it everywhere — don't mix.**
+8. **#31 Wire the Razor pages to real data** ✅ done, committed (`34ecef3`).
+   `Categories.razor`, `Units.razor`, `Items.razor`, `MarketList.razor` and
+   `MarketDetail.razor` (map, delivery windows, market edit) all call `AdminApiClient`
+   now, with full create/edit/delete — the plan's Epic 3 deliverable is explicitly "Admin
+   CRUD", not read-only lists, so disabled buttons were built out rather than left inert.
+   `Api/CatalogDtos.cs` / `Api/MarketDtos.cs` are Admin's own wire-DTO copies (same
+   no-Application-reference pattern as `Api/AdminApiDtos.cs` from #29).
+   `AdminViewModels.cs`'s `CategoryRow`/`ItemRow`/`UnitRow`/`MarketRow`/
+   `DeliveryWindowRow` ids are now `long` (decided: widen, not narrow, matching every id
+   in the real API). `PlaceholderData.cs` itself is untouched — `DeliveryRuns.razor`
+   still reads `PlaceholderData.Markets` and is out of this task's scope.
+
+   **Two scope calls made and worth knowing about:** item image upload is out (create
+   always sends a null `MediaAssetId`, edit preserves whatever the item already had —
+   real S3 presign/upload wiring is separable work); "Verified stalls" was removed from
+   the Market screens rather than wired to a fake `0`, since no partner/stall
+   verification system exists yet.
+
+   **Verified end-to-end in a real Chromium browser** against the live API and DB,
+   covering the literal Epic 3 exit criterion through the actual UI (not just direct API
+   calls, unlike #28's verification): created a category/unit/item, created a market,
+   drew a real polygon with Leaflet.draw and saved it, edited the market to Active
+   (correctly rejected until the area was saved), added/edited/removed a delivery
+   window, then — via the real customer-facing API — confirmed a point inside the
+   admin-drawn polygon is accepted and a point outside is refused with a clear message.
+   Two apparent failures during verification turned out to be testing-technique bugs,
+   not app bugs, confirmed by re-running the same steps in isolation: (1) closing a
+   Leaflet.draw polygon by re-clicking the first vertex's *page coordinate* is not
+   reliable automation — use the toolbar's `a[title="Finish drawing"]` link instead; (2)
+   a combined multi-step script had a timing race clicking through modals back-to-back.
+   No application code changed for either.
 9. **#32 Customer app address + eligibility** — lower priority than the admin-side work
    for satisfying the exit criteria (the exit criteria's polygon-drawing half is entirely
    admin-side). A real screen calling the eligibility endpoint (`MarketEligibilityService`
