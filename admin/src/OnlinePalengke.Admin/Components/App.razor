@@ -26,11 +26,11 @@
 
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="NoPrerenderInteractiveServer" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="NoPrerenderInteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 
@@ -43,3 +43,12 @@
 </body>
 
 </html>
+
+@code {
+    // Static prerendering runs before any circuit exists, so JS interop - and therefore
+    // ProtectedSessionStorage, which AdminAuthenticationStateProvider needs to read a
+    // persisted session - is unavailable. Disabling prerendering sidesteps that class of
+    // bug entirely rather than making every auth read tolerate a "not ready yet" state.
+    private static readonly IComponentRenderMode NoPrerenderInteractiveServer =
+        new InteractiveServerRenderMode(prerender: false);
+}

@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject NavigationManager Navigation
+@inject AdminAuthenticationStateProvider AuthState
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
@@ -29,14 +30,18 @@
 
             <div class="topbar__spacer"></div>
 
-            <div class="topbar__user">
-                @* Placeholder only. The project was scaffolded with --auth None; sign-in is wired later. *@
-                <span class="topbar__avatar" aria-hidden="true">OA</span>
-                <span class="topbar__user-text">
-                    <span class="topbar__user-name">Ops Administrator</span>
-                    <span class="topbar__user-role">Signed-in user placeholder</span>
-                </span>
-            </div>
+            <AuthorizeView>
+                <Authorized>
+                    <div class="topbar__user">
+                        <span class="topbar__avatar" aria-hidden="true">@Initials(context.User.Identity?.Name)</span>
+                        <span class="topbar__user-text">
+                            <span class="topbar__user-name">@context.User.Identity?.Name</span>
+                            <span class="topbar__user-role">Admin</span>
+                        </span>
+                    </div>
+                    <button type="button" class="op-btn op-btn--ghost op-btn--sm" @onclick="SignOutAsync">Sign out</button>
+                </Authorized>
+            </AuthorizeView>
         </header>
 
         <main class="shell__content" id="main-content" tabindex="-1">
@@ -60,6 +65,23 @@
     private void ToggleNav() => _navOpen = !_navOpen;
 
     private void CloseNav() => _navOpen = false;
+
+    private static string Initials(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return "OA";
+        }
+
+        var local = email.Split('@')[0];
+        return local.Length >= 2 ? local[..2].ToUpperInvariant() : local.ToUpperInvariant();
+    }
+
+    private async Task SignOutAsync()
+    {
+        await AuthState.SignOutAsync();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
     {

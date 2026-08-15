@@ -1,0 +1,90 @@
+@page "/login"
+@layout Layout.LoginLayout
+@attribute [AllowAnonymous]
+@inject AdminApiClient Api
+@inject AdminAuthenticationStateProvider AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in · Online Palengke Admin</PageTitle>
+
+<div class="login-card">
+    <div class="login-card__brand">
+        <span class="sidenav__mark" aria-hidden="true">OP</span>
+        <div>
+            <div class="login-card__brand-name">Online Palengke</div>
+            <div class="login-card__brand-sub">Operations console</div>
+        </div>
+    </div>
+
+    <h1 class="login-card__title">Sign in</h1>
+
+    @if (_error is not null)
+    {
+        <div class="notice notice--error" role="alert">
+            <span class="notice__glyph" aria-hidden="true">⚠</span>
+            <span>@_error</span>
+        </div>
+    }
+
+    <form @onsubmit="HandleLoginAsync" @onsubmit:preventDefault="true">
+        <div class="field">
+            <label class="field__label" for="login-email">Email</label>
+            <input id="login-email" class="field__control" type="email" autocomplete="username"
+                   @bind="_email" @bind:event="oninput" disabled="@_submitting" required />
+        </div>
+
+        <div class="field">
+            <label class="field__label" for="login-password">Password</label>
+            <input id="login-password" class="field__control" type="password" autocomplete="current-password"
+                   @bind="_password" @bind:event="oninput" disabled="@_submitting" required />
+        </div>
+
+        <button type="submit" class="op-btn op-btn--primary login-card__submit" disabled="@_submitting">
+            @(_submitting ? "Signing in…" : "Sign in")
+        </button>
+    </form>
+</div>
+
+@code {
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private bool _submitting;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/", replace: true);
+        }
+    }
+
+    private async Task HandleLoginAsync()
+    {
+        if (_submitting)
+        {
+            return;
+        }
+
+        _error = null;
+        _submitting = true;
+
+        try
+        {
+            var response = await Api.LoginAsync(_email.Trim(), _password);
+            await AuthState.SignInAsync(new AdminSessionInfo(
+                response.User.Id, response.User.Email, response.AccessToken, response.RefreshToken, response.AccessTokenExpiresAt));
+
+            Navigation.NavigateTo("/", replace: true);
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

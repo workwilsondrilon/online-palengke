@@ -1,4 +1,5 @@
 @page "/markets/{MarketId:int}"
+@attribute [Authorize]
 
 <PageTitle>@(_market?.Name ?? "Market") · Online Palengke Admin</PageTitle>
 

@@ -480,6 +480,64 @@ p {
     color: #513b05;
 }
 
+.notice--error {
+    border-color: #e3b3ae;
+    background: var(--op-red-100);
+    color: #7a221b;
+}
+
+.notice--error strong {
+    color: #5c1a15;
+}
+
+/* ------------------------------------------------------------------ login */
+
+.login-shell {
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: var(--op-bg);
+}
+
+.login-card {
+    width: 100%;
+    max-width: 22rem;
+    padding: 1.75rem;
+    background: var(--op-surface);
+    border: 1px solid var(--op-border);
+    border-radius: var(--op-radius-lg);
+    box-shadow: var(--op-shadow-lg);
+}
+
+.login-card__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1.25rem;
+}
+
+.login-card__brand-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.login-card__brand-sub {
+    font-size: 0.78rem;
+    color: var(--op-text-muted);
+}
+
+.login-card__title {
+    font-size: 1.15rem;
+    margin-bottom: 1.1rem;
+}
+
+.login-card__submit {
+    width: 100%;
+    margin-top: 0.3rem;
+}
+
 /* ------------------------------------------------------------------ panels + tables */
 
 .panel {
