@@ -79,7 +79,8 @@ public static class ApiSetup
         api.MapGroup("/customer")
             .RequireAuthorization(PolicyFor(UserRole.Customer))
             .MapOtpEndpoints(UserRole.Customer, "customer")
-            .MapUploadEndpoints("customer");
+            .MapUploadEndpoints("customer")
+            .MapCustomerMarketEndpoints();
 
         api.MapGroup("/partner")
             .RequireAuthorization(PolicyFor(UserRole.Partner))
@@ -95,6 +96,8 @@ public static class ApiSetup
             .RequireAuthorization(PolicyFor(UserRole.Admin));
         admin.MapAdminLoginEndpoint();
         admin.MapUploadEndpoints("admin");
+        admin.MapCatalogEndpoints();
+        admin.MapAdminMarketEndpoints();
 
         api.MapGlobalAuthEndpoints();
     }
