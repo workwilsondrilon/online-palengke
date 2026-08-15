@@ -1,0 +1,102 @@
+# =============================================================================
+# Builds and pushes the api and admin-web images to GitHub Container Registry.
+#
+# Triggers ONLY on push to `master` - the production-ready branch in this
+# repo's git-flow setup (develop is the day-to-day integration branch). This
+# produces artifacts; it never touches the production server. Deploying those
+# artifacts is a separate, manually-triggered workflow (deploy.yml) - nothing
+# here causes a live deploy.
+#
+# Every image is pushed under two tags:
+#   :latest            - what a `docker compose pull` grabs by default
+#   :sha-<short-sha>    - a stable pin, so a bad deploy is a one-line image-tag
+#                          edit away from rollback without rebuilding anything
+# =============================================================================
+name: Build and Push Images
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: build-and-push-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-push-api:
+    name: Build & push api image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}-api"
+          SHA_SHORT="${GITHUB_SHA::7}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "tags=$IMAGE:latest,$IMAGE:sha-$SHA_SHORT" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          # Repo root - the Api project references sibling projects and reads
+          # Directory.Build.props from here. See the comment at the top of
+          # admin/src/OnlinePalengke.Api/Dockerfile.
+          context: .
+          file: admin/src/OnlinePalengke.Api/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-push-admin:
+    name: Build & push admin-web image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}-admin"
+          SHA_SHORT="${GITHUB_SHA::7}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "tags=$IMAGE:latest,$IMAGE:sha-$SHA_SHORT" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: admin/src/OnlinePalengke.Admin/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
