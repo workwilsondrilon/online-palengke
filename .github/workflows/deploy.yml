@@ -1,0 +1,56 @@
+# =============================================================================
+# Deploys the current `master` images to the production Hostinger VPS.
+#
+# THIS NEVER RUNS AUTOMATICALLY. There is no `push:` or `pull_request:`
+# trigger below - `workflow_dispatch` only, which means it runs exclusively
+# when a human clicks "Run workflow" in the Actions tab (or via `gh workflow
+# run deploy.yml`, if the GitHub CLI is ever set up locally). That is
+# deliberate: CI builds and pushes images automatically, but the actual
+# production deploy stays a decision a person makes on purpose, every time.
+#
+# This workflow is a shell until Epic 10 (Production Deployment) exists:
+#   - docker-compose.prod.yml has not been written yet.
+#   - The `production` GitHub Environment and its secrets
+#     (DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY) do not exist yet.
+# Running it before then will fail at the "Deploy" step for exactly those
+# reasons - that failure is expected, not a bug, until Epic 10 closes.
+# =============================================================================
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm this will update the live production server.'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: Deploy to Hostinger VPS
+    runs-on: ubuntu-latest
+    # A `production` Environment, once created (Epic 10), lets repo settings
+    # require a manual approval step here on top of the workflow_dispatch
+    # click itself - defence in depth, not a replacement for it.
+    environment: production
+    steps:
+      - name: Verify confirmation input
+        if: inputs.confirm != 'deploy'
+        run: |
+          echo "::error::Confirmation text did not match 'deploy'. Aborting without touching the server."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/online-palengke
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+            docker image prune -f
