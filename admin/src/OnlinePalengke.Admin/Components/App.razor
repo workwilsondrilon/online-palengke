@@ -13,16 +13,9 @@
     <link rel="stylesheet" href="@Assets["css/admin.css"]" />
     <link rel="stylesheet" href="@Assets["OnlinePalengke.Admin.styles.css"]" />
 
-    @*
-        LEAFLET SEAM — see wwwroot/lib/leaflet/README.md.
-        Drop leaflet.css / leaflet.js / leaflet.draw.css / leaflet.draw.js into
-        wwwroot/lib/leaflet/ and uncomment the four lines below. Nothing else in the app
-        needs to change; the map host lives in Components/Markets/ServiceAreaMap.razor.
-        Deliberately NOT wired yet, and deliberately NOT a CDN reference.
-
-        <link rel="stylesheet" href="@Assets["lib/leaflet/leaflet.css"]" />
-        <link rel="stylesheet" href="@Assets["lib/leaflet/leaflet.draw.css"]" />
-    *@
+    @* Leaflet + Leaflet.draw - vendored locally, not a CDN reference. See wwwroot/lib/leaflet/README.md. *@
+    <link rel="stylesheet" href="@Assets["lib/leaflet/leaflet.css"]" />
+    <link rel="stylesheet" href="@Assets["lib/leaflet/leaflet.draw.css"]" />
 
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -33,13 +26,8 @@
     <Routes @rendermode="NoPrerenderInteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
-
-    @*
-        LEAFLET SEAM (scripts) — uncomment alongside the stylesheets above.
-
-        <script src="@Assets["lib/leaflet/leaflet.js"]"></script>
-        <script src="@Assets["lib/leaflet/leaflet.draw.js"]"></script>
-    *@
+    <script src="@Assets["lib/leaflet/leaflet.js"]"></script>
+    <script src="@Assets["lib/leaflet/leaflet.draw.js"]"></script>
 </body>
 
 </html>

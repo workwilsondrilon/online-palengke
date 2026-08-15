@@ -1124,53 +1124,13 @@ p {
 
 /* ------------------------------------------------------------------ map placeholder */
 
-.map-placeholder {
-    position: relative;
+.service-area-map {
     height: 420px;
-    border: 2px dashed var(--op-border-strong);
-    border-radius: var(--op-radius);
-    background:
-        repeating-linear-gradient(45deg, var(--op-sand-100) 0 12px, var(--op-surface-alt) 12px 24px);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    gap: 0.4rem;
-    padding: 1.5rem;
-}
-
-.map-placeholder__tag {
-    position: absolute;
-    top: 0.6rem;
-    left: 0.6rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--op-radius-sm);
-    background: var(--op-green-800);
-    color: var(--op-text-inverse);
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
-.map-placeholder__title {
-    font-weight: 600;
-}
-
-.map-placeholder__hint {
-    font-size: 0.83rem;
-    color: var(--op-text-muted);
-    max-width: 52ch;
-}
-
-.map-placeholder__code {
-    font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
-    font-size: 0.78rem;
-    background: var(--op-surface);
     border: 1px solid var(--op-border);
-    border-radius: var(--op-radius-sm);
-    padding: 0.15rem 0.4rem;
+    border-radius: var(--op-radius);
+    /* Leaflet positions its own panes absolutely within this box. */
+    position: relative;
+    z-index: 0;
 }
 
 /* ------------------------------------------------------------------ content feed */

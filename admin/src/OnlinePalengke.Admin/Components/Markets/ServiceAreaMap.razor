@@ -1,42 +1,26 @@
 @*
-    Delivery service-area editor — SEAM ONLY.
+    Delivery service-area editor - a Leaflet + Leaflet.draw polygon editor.
 
-    This renders a placeholder sized exactly like the live map will be. No Leaflet code
-    runs here yet and no CDN is contacted. The parameters and the element reference below
-    are the full contract the real editor needs, so wiring it up is confined to this file
-    plus the commented tags in App.razor.
-
-    See wwwroot/lib/leaflet/README.md for the step-by-step.
+    One polygon at a time: drawing a new shape or finishing an edit replaces whatever was
+    there, matching decision 14's model of a market having a single service area. The
+    GeoJSON this produces/consumes is exactly what UpdateServiceAreaRequest.PolygonGeoJson
+    expects on the API side - no conversion needed here, MarketService does the WKT flip
+    server-side.
 *@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
-<div class="map-placeholder" @ref="_mapHost" id="@_hostId" role="img" aria-label="@AriaLabel">
-    <span class="map-placeholder__tag">Map placeholder</span>
-    <p class="map-placeholder__title">Delivery service area</p>
-    <p class="map-placeholder__hint">
-        A Leaflet map with the Leaflet.draw polygon toolbar mounts here.
-        Drop the library into <span class="map-placeholder__code">wwwroot/lib/leaflet/</span>,
-        uncomment the <span class="map-placeholder__code">LEAFLET SEAM</span> tags in
-        <span class="map-placeholder__code">App.razor</span>, then implement this component.
-    </p>
-    <p class="map-placeholder__hint">
-        @if (HasSavedArea)
-        {
-            <text>This market already has a saved polygon; it will load as the initial shape.</text>
-        }
-        else
-        {
-            <text>No polygon saved for this market yet — the editor will open with an empty canvas.</text>
-        }
-    </p>
-</div>
+<div class="service-area-map" @ref="_mapHost" id="@_hostId" role="img" aria-label="@AriaLabel"></div>
 
 @code {
     private readonly string _hostId = $"service-area-map-{Guid.NewGuid():N}";
 
-    // Held now so the JS interop call site does not need any markup change later.
     private ElementReference _mapHost;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<ServiceAreaMap>? _selfRef;
+    private string? _loadedGeoJson;
 
-    /// <summary>The element the Leaflet map will mount into.</summary>
+    /// <summary>The element the Leaflet map is mounted into.</summary>
     public ElementReference MapHost => _mapHost;
 
     /// <summary>Market whose service area is being edited.</summary>
@@ -47,16 +31,74 @@
     [Parameter]
     public string? InitialPolygonGeoJson { get; set; }
 
-    /// <summary>Raised with the edited polygon as GeoJSON once the editor is wired up.</summary>
+    /// <summary>
+    /// Raised with the edited polygon as GeoJSON whenever a shape is drawn, edited or
+    /// deleted. An empty string means the polygon was cleared.
+    /// </summary>
     [Parameter]
     public EventCallback<string> OnPolygonChanged { get; set; }
 
-    /// <summary>Disables editing; the map will render read-only.</summary>
+    /// <summary>Disables editing; the map will render read-only (no draw toolbar).</summary>
     [Parameter]
     public bool ReadOnly { get; set; }
 
-    private bool HasSavedArea => !string.IsNullOrWhiteSpace(InitialPolygonGeoJson);
-
     private string AriaLabel =>
-        $"Delivery service area map for market {MarketId}. Interactive map not yet enabled in this build.";
+        $"Delivery service area map for market {MarketId}.";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/service-area-map.js");
+        _selfRef = DotNetObjectReference.Create(this);
+
+        await _module.InvokeVoidAsync("init", _hostId, _selfRef, new
+        {
+            readOnly = ReadOnly,
+            initialGeoJson = InitialPolygonGeoJson,
+        });
+
+        _loadedGeoJson = InitialPolygonGeoJson;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_module is null || InitialPolygonGeoJson == _loadedGeoJson)
+        {
+            return;
+        }
+
+        await _module.InvokeVoidAsync("load", _hostId, InitialPolygonGeoJson);
+        _loadedGeoJson = InitialPolygonGeoJson;
+    }
+
+    /// <summary>Called from service-area-map.js whenever the drawn polygon changes.</summary>
+    [JSInvokable]
+    public async Task OnPolygonEditedFromJs(string? geoJson)
+    {
+        _loadedGeoJson = geoJson;
+        await OnPolygonChanged.InvokeAsync(geoJson ?? string.Empty);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("destroy", _hostId);
+            }
+            catch (JSDisconnectedException)
+            {
+                // The circuit is already gone - nothing to clean up client-side.
+            }
+
+            await _module.DisposeAsync();
+        }
+
+        _selfRef?.Dispose();
+    }
 }
