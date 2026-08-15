@@ -42,6 +42,26 @@ public sealed class ValidationException : AppException
     private const int StatusCodes400 = 400;
 }
 
+/// <summary>
+/// The caller presented no credential, or the one presented (a refresh token,
+/// an OTP-derived session) is invalid, expired, or revoked. 401.
+/// </summary>
+/// <remarks>
+/// Distinct from the 401 that ASP.NET Core's authentication middleware
+/// already returns automatically when an <c>[Authorize]</c>-gated endpoint
+/// gets no valid bearer token — that path never reaches application code at
+/// all. This exception exists for the cases application logic decides for
+/// itself inside an otherwise-anonymous endpoint, chiefly refresh-token
+/// validation: the endpoint accepts any request body, but the token inside
+/// it can still turn out to be unusable.
+/// </remarks>
+public sealed class UnauthorizedAppException(string message) : AppException(message)
+{
+    public override int StatusCode => 401;
+
+    public override string ErrorCode => "unauthorized";
+}
+
 /// <summary>The caller is authenticated but not permitted to do this. 403.</summary>
 /// <remarks>
 /// Deliberately distinct from a 404. Returning 403 confirms the resource exists, which
@@ -61,6 +81,17 @@ public sealed class NotFoundException(string message) : AppException(message)
     public override int StatusCode => 404;
 
     public override string ErrorCode => "not_found";
+}
+
+/// <summary>The caller is doing this too often — OTP requests chief among them. 429.</summary>
+public sealed class TooManyRequestsException(string message, TimeSpan? retryAfter = null) : AppException(message)
+{
+    /// <summary>How long the caller should wait before trying again, if known.</summary>
+    public TimeSpan? RetryAfter { get; } = retryAfter;
+
+    public override int StatusCode => 429;
+
+    public override string ErrorCode => "rate_limited";
 }
 
 /// <summary>
