@@ -72,10 +72,10 @@ hard way.
 
 ## What's in progress right now — Epic 3
 
-**Uncommitted, mid-flight.** Four Domain files exist on disk, not yet committed:
-`admin/src/OnlinePalengke.Domain/Catalog/{Category,Unit,Item,ItemUnit}.cs`. That's
-task #24 (below) roughly half-done — `Market` and `DeliveryWindow` entities not written
-yet.
+**Backend is fully built through the Infrastructure layer, committed and pushed, verified
+against the real local database.** Tasks #24-#27 (below) are done. What's left is entirely
+the Api layer, the Admin-to-API integration pattern, Leaflet, and the customer app —
+i.e. everything that makes the built backend reachable and visible.
 
 ### Epic 3 scope (from the plan)
 
@@ -89,7 +89,7 @@ yet.
 > address inside it is accepted while one outside is refused with a clear message —
 > against the real API, not placeholder data.
 
-### Architecture decision made this session, not yet written into the plan file
+### Architecture decision made in an earlier session, not yet written into the plan file
 
 **Admin talks to the API over HTTP, like the three Flutter apps do — it does NOT get a
 direct C# project reference to `OnlinePalengke.Application`/`Infrastructure`.** The plan
@@ -103,40 +103,69 @@ integration pattern task #29 needs to build once and well.
 
 ### Task list for the rest of Epic 3 (in dependency order — do them in this order)
 
-Task numbers are from this session's `TaskList` (`TaskGet`/`TaskList` to see live status):
+Task numbers are stable references used across sessions (not a live `TaskList` — nothing
+persists there between sessions, this file is the source of truth):
 
-1. **#24 Domain entities** — `Category`✅ `Unit`✅ `Item`✅ `ItemUnit`✅ done.
-   `Market` and `DeliveryWindow` **not yet written**. Market needs a polygon
-   representation — plan says WKT crosses the Dapper boundary
-   (`ST_AsText`/`ST_GeomFromText`), so the Domain entity itself can hold the WKT string
-   or a simple `IReadOnlyList<(double Lat, double Lng)>` ring — pick one and keep it
-   consistent with how `MediaAsset`/`OtpCode` etc. are written elsewhere in this codebase
-   (plain properties, `required init`, XML remarks explaining the *why* not the *what*).
-   Also add a `MarketStatus` enum — PlaceholderData shows three real states (Onboarding,
-   Active, Suspended), not just a boolean.
-2. **#25 Migration 002** — `categories, items, item_units, markets, delivery_windows`
-   tables, **plus backfill the two FKs on `partners`** that script 001 deliberately left
-   dangling (`partners.market_id`, `partners.category_id` — see the `NOTE:` comment in
-   `001_identity_and_media.sql` right above `CREATE TABLE partners`). `markets` needs
-   `SPATIAL INDEX` on `service_area POLYGON NOT NULL SRID 4326`. Decided this session:
-   `markets` also gets explicit `city`/`province` columns (not just a free-text
-   `address`) and `categories` gets a `slug` column — both needed because
-   `AdminViewModels.cs`'s existing `MarketRow`/`CategoryRow` already display them; the
-   plan's Data model section was a sketch, not exhaustive DDL, fleshing it out here is
-   expected. `item_units` needs an `is_default` boolean (one item can have multiple valid
-   units — kg or piece — with one marked default for shopping-list UI).
-3. **#26 Application layer** — repos + services + DTOs for catalog and markets, plus an
-   eligibility use case: given lat/lng, which markets' polygons contain the point.
-4. **#27 Infrastructure** — Dapper repos, WKT round-trip, `ST_Contains` query.
-5. **#28 Api endpoints** — admin CRUD under `/api/admin/*` for all five entities, plus a
-   customer-facing eligibility endpoint (lat/lng in, eligible markets out).
-6. **#29 AdminApiClient + admin login + Blazor auth-state** — the reusable pattern
-   described above. Needs a real login page (none exists yet — Admin currently has zero
-   auth UI) and something implementing Blazor Server's `AuthenticationStateProvider` so a
-   signed-in session survives across the SignalR circuit. Calls
-   `POST /api/admin/auth/login` (already built and verified in Epic 2).
-7. **#30 Vendor Leaflet + implement the map JS interop** — **this seam is unusually
-   well-prepared, read it before doing anything else in this task**:
+1. **#24 Domain entities** ✅ done, committed (`b211fe1`, `cdb4c67`). `Category`, `Unit`,
+   `Item`, `ItemUnit`, `Market`, `MarketStatus`, `DeliveryWindow`, plus
+   `Domain/Markets/PolygonWkt.cs` (`ff43cd3`) — a pure GeoJSON↔WKT converter with its own
+   unit tests, needed because of the axis-order landmine found in step 2.
+2. **#25 Migration 002** ✅ done, committed (`966d10a`), applied to the local DB, smoke-
+   tested and rolled back. `categories, units, items, item_units, markets,
+   delivery_windows` tables, plus the deferred `partners.market_id`/`category_id` FKs.
+   **Two real landmines found and documented in the script's header — read them before
+   touching geometry again:**
+   - `SPATIAL INDEX` requires every indexed column `NOT NULL`. That's incompatible with
+     the real admin flow (market created before its polygon is drawn), so
+     `markets.service_area` is `POLYGON NULL` with **no spatial index** — a full-table
+     `ST_Contains` scan is fine at wet-market scale (dozens of rows, not thousands).
+   - MySQL 8's SRID 4326 WKT axis order is **latitude, longitude** — the reverse of
+     GeoJSON's longitude, latitude. Confirmed directly against the server
+     (`ST_GeomFromText('POINT(14.667 121.0)', 4326)` is Manila; the swapped order throws
+     an out-of-range error). `PolygonWkt` (see #24) isolates this flip to two lines.
+3. **#26 Application layer** ✅ done, committed (`fa48520`). `ICategoryRepository`,
+   `IUnitRepository`, `IItemRepository`, `IItemUnitRepository`, `IMarketRepository`,
+   `IDeliveryWindowRepository` abstractions; `CategoryService`, `UnitService`,
+   `ItemService` (Catalog namespace) and `MarketService`, `DeliveryWindowService`,
+   `MarketEligibilityService` (Markets namespace); DTOs in `CatalogContracts.cs` /
+   `MarketContracts.cs`; all registered in `DependencyInjection.cs`. Notable design
+   points: `ItemService` replaces an item's unit set as a whole (delete-then-reinsert in
+   one `IUnitOfWork` transaction) to keep "at most one default unit" trivially true;
+   `MarketService.UpdateServiceAreaAsync` is separate from the rest of the market's
+   fields, matching the admin UI's dedicated "Save area" action; delete on
+   Category/Unit/Market catches a real MySQL FK violation (confirmed empirically:
+   `DbException.SqlState == "23000"` via MySqlConnector) and turns it into a friendly
+   `ConflictException` instead of a raw 500.
+4. **#27 Infrastructure** ✅ done, committed (`7d2eb2d`). Dapper repos for all six
+   abstractions above, following `MediaAssetRepository`'s established shape. **Verified
+   end-to-end against the real local database** (insert/read/update/delete through every
+   repo, not just a build check) — 16/16 checks passed. Found and fixed one more
+   landmine along the way, this one in the driver itself, not the schema: **reading a
+   MySQL `TIME` column straight into a C# `TimeOnly` property does not throw — it
+   silently returns midnight regardless of the stored value**, with this
+   Dapper 2.1.79 / MySqlConnector 2.6.2 pair. `DeliveryWindowRepository` routes
+   `starts_at`/`ends_at` through `TimeSpan` on both read and write, converting to/from
+   `TimeOnly` explicitly in the row-mapping code — that round-trips correctly. (The
+   verification harness itself briefly produced 4 false failures from forgetting to call
+   `DapperConfiguration.Apply()` — a good reminder that a standalone check needs the same
+   startup wiring as the real app, not evidence of an app bug.)
+5. **#28 Api endpoints — not started.** Admin CRUD under `/api/admin/*` for all five
+   entities (categories, units, items, markets, delivery-windows), plus a customer-facing
+   eligibility endpoint (lat/lng in, eligible markets out — `MarketEligibilityService` is
+   already built and ready to call). Look at how Epic 2's auth endpoints are wired in
+   `OnlinePalengke.Api` (minimal API style, `ApiSetup.cs` for policies) before inventing a
+   new pattern. Remember the `Naming`/`Naming.FromDbValue` exception vs. `AppException`
+   mapping already established — `AppException` subclasses map to ProblemDetails
+   automatically; anything else is a bare 500.
+6. **#29 AdminApiClient + admin login + Blazor auth-state — not started.** The reusable
+   pattern described above. Needs a real login page (none exists yet — Admin currently
+   has zero auth UI) and something implementing Blazor Server's
+   `AuthenticationStateProvider` so a signed-in session survives across the SignalR
+   circuit. Calls `POST /api/admin/auth/login` (already built and verified in Epic 2).
+   This is the task HANDOFF from the prior session called out as needing focused
+   attention — treat it as its own deliverable, not something to rush alongside #28.
+7. **#30 Vendor Leaflet + implement the map JS interop — not started.** **This seam is
+   unusually well-prepared, read it before doing anything else in this task**:
    `admin/src/OnlinePalengke.Admin/wwwroot/lib/leaflet/README.md` gives exact pinned
    versions (Leaflet 1.9.x, Leaflet.draw 1.0.4), exact files to vendor, and a numbered
    wiring checklist. `Components/App.razor` has four commented-out tags marked
@@ -144,32 +173,37 @@ Task numbers are from this session's `TaskList` (`TaskGet`/`TaskList` to see liv
    declares the full parameter contract (`MarketId`, `InitialPolygonGeoJson`,
    `OnPolygonChanged`, an `ElementReference` host) — implementing it is adding
    `wwwroot/js/service-area-map.js` (`init`/`load`/`destroy`) and JS interop glue, not
-   redesigning anything. Confirmed this session: outbound internet access works fine for
-   `curl`ing the library files from jsdelivr to vendor them locally (the README's "no CDN
-   at runtime" constraint is about the deployed app fetching at request time, not about
-   this one-time download-and-commit step). Tile source undecided — public OSM tiles are
-   the zero-setup default for now; the README flags this needs revisiting before real
-   production traffic (OSM's usage policy disallows heavy production load on the public
-   servers).
-8. **#31 Wire the Razor pages to real data** — `Categories.razor`, `Items.razor`,
-   `Units.razor`, `MarketList.razor`, `MarketDetail.razor` (including delivery windows)
-   swap `PlaceholderData.X` for `AdminApiClient` calls. Keep `AdminViewModels.cs`'s
-   existing record shapes as the binding model where reasonable (the Razor markup already
-   binds their exact property names) — **but note their `Id` properties are `int`; every
-   other id in this codebase is `long` (`BIGINT UNSIGNED`), so either widen these to
-   `long` or make sure the DTOs narrow consistently. Decide once, do it everywhere.**
+   redesigning anything. The GeoJSON this map produces/consumes is exactly what
+   `UpdateServiceAreaRequest.PolygonGeoJson` expects — no conversion needed on the Admin
+   side, `MarketService` does the WKT flip server-side. Confirmed in an earlier session:
+   outbound internet access works fine for `curl`ing the library files from jsdelivr to
+   vendor them locally. Tile source undecided — public OSM tiles are the zero-setup
+   default for now; the README flags this needs revisiting before real production
+   traffic.
+8. **#31 Wire the Razor pages to real data — not started.** `Categories.razor`,
+   `Items.razor`, `Units.razor`, `MarketList.razor`, `MarketDetail.razor` (including
+   delivery windows) swap `PlaceholderData.X` for `AdminApiClient` calls. Keep
+   `AdminViewModels.cs`'s existing record shapes as the binding model where reasonable
+   (the Razor markup already binds their exact property names) — **but note their `Id`
+   properties are `int`; every id in the new Application-layer DTOs (`CategoryResponse`,
+   `MarketResponse`, etc.) is `long`, matching every other id in this codebase
+   (`BIGINT UNSIGNED`). Decide once whether to widen `AdminViewModels` to `long` or narrow
+   at the mapping boundary, then do it everywhere — don't mix.**
 9. **#32 Customer app address + eligibility** — lower priority than the admin-side work
    for satisfying the exit criteria (the exit criteria's polygon-drawing half is entirely
-   admin-side). A real screen calling the eligibility endpoint is required; whether it's
-   a full interactive map-pin picker (`flutter_map` — the Flutter/OSM equivalent of
-   Leaflet, no API key needed, consistent with avoiding Google Maps billing setup — was
-   the leaning, not yet decided/started) or a simpler working form is still open. Don't
-   let this block finishing the admin side first.
+   admin-side). A real screen calling the eligibility endpoint (`MarketEligibilityService`
+   → `#28`'s customer-facing endpoint) is required; whether it's a full interactive
+   map-pin picker (`flutter_map` — the Flutter/OSM equivalent of Leaflet, no API key
+   needed, consistent with avoiding Google Maps billing setup — was the leaning, not yet
+   decided/started) or a simpler working form is still open. Don't let this block
+   finishing the admin side first.
 10. **#33 End-to-end verification** — the actual exit criteria scenario: create a market
     in admin, draw a real polygon, save it, then hit the eligibility endpoint (or the
     customer app) with a point inside and a point outside and confirm accept/reject with
-    a clear message. Do this against the real local database, same pattern as Epic 2's
-    curl-based verification walkthrough.
+    a clear message. Do this against the real local database, same pattern used to verify
+    #27. The Application/Infrastructure layers underneath this are already proven correct
+    (see #27) — this step is specifically about proving the wiring above them (Api →
+    Admin/Flutter → user-visible result), not re-proving the geometry.
 
 ## Working patterns established this session (keep following these)
 
@@ -177,8 +211,13 @@ Task numbers are from this session's `TaskList` (`TaskGet`/`TaskList` to see liv
   verification. Never batch multiple unrelated changes into one commit.
 - **Verify against the real thing, not just "should work."** Epic 2's JWT claim bug and
   the compileSdk bug were both invisible from code review alone and only surfaced by
-  actually running the flow / actually building an APK. Budget time for this on Epic 3
-  too — actually draw a polygon, actually save it, actually query `ST_Contains`.
+  actually running the flow / actually building an APK. Epic 3's Infrastructure layer
+  reinforced this hard: the MySQL SRID 4326 axis order and the `SPATIAL INDEX` NOT NULL
+  requirement (found writing migration 002) and the silent `TimeOnly` read bug (found
+  writing `DeliveryWindowRepository`) were all invisible from code review and would have
+  shipped as confident-looking, wrong code. Keep budgeting real-DB verification time for
+  the rest of Epic 3 — actually draw a polygon in the browser, actually save it, actually
+  hit the eligibility endpoint with a real point.
 - **Least privilege on every credential.** The MySQL `palengke` user is scoped to one
   database even though root was available. Apply the same instinct to anything Epic 3
   touches.
