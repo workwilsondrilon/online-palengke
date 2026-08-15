@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengke_core/palengke_core.dart';
 
+import 'eligibility/eligibility_page.dart';
+
 /// Placeholder home screen for M0.
 ///
 /// Its only real job is the "Check API health" button — the acceptance check
@@ -66,6 +68,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ],
                   ),
                 ),
+              ),
+              Spacing.gapXl,
+              PrimaryButton(
+                label: 'Check delivery eligibility',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const EligibilityPage()),
+                ),
+                icon: Icons.local_shipping_outlined,
               ),
               Spacing.gapXl,
               Text('M0 acceptance check', style: Theme.of(context).textTheme.titleMedium),
