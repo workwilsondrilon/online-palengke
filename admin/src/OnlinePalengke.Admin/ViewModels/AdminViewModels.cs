@@ -35,7 +35,7 @@ public sealed record RiderOnShift(
 
 /// <summary>Catalog category. Categories group items and scope the per-category winning bid.</summary>
 public sealed record CategoryRow(
-    int Id,
+    long Id,
     string Name,
     string Slug,
     int ItemCount,
@@ -47,7 +47,7 @@ public sealed record CategoryRow(
 /// exist on partner quotes, so no screen in this app may show a price against an item.
 /// </summary>
 public sealed record ItemRow(
-    int Id,
+    long Id,
     string Name,
     string CategoryName,
     string DefaultUnitCode,
@@ -57,7 +57,7 @@ public sealed record ItemRow(
 
 /// <summary>Unit of measure available to shopping lists and quotes.</summary>
 public sealed record UnitRow(
-    int Id,
+    long Id,
     string Code,
     string Name,
     bool AllowsFractionalQuantity,
@@ -65,7 +65,7 @@ public sealed record UnitRow(
 
 /// <summary>A wet market in the network.</summary>
 public sealed record MarketRow(
-    int Id,
+    long Id,
     string Name,
     string City,
     string Province,
@@ -76,7 +76,7 @@ public sealed record MarketRow(
 
 /// <summary>A recurring delivery window for one market, expressed in Manila wall-clock time.</summary>
 public sealed record DeliveryWindowRow(
-    int Id,
+    long Id,
     string Label,
     TimeOnly StartsAt,
     TimeOnly EndsAt,

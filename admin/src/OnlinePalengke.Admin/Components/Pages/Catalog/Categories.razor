@@ -1,5 +1,6 @@
 @page "/catalog/categories"
 @attribute [Authorize]
+@inject AdminApiClient Api
 
 <PageTitle>Categories · Online Palengke Admin</PageTitle>
 
@@ -9,15 +10,24 @@
         <a href="catalog/items">Catalog</a> Categories
     </Breadcrumb>
     <Actions>
-        <button type="button" class="op-btn op-btn--primary" disabled>New category</button>
+        <button type="button" class="op-btn op-btn--primary" @onclick="OpenCreate">New category</button>
     </Actions>
 </PageHeader>
 
+@if (_error is not null)
+{
+    <div class="notice notice--error" role="alert">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_error</span>
+    </div>
+}
+
 <DataPanel Title="All categories"
            Caption="Catalog categories with item counts"
-           IsEmpty="@(PlaceholderData.Categories.Count == 0)">
+           IsLoading="_loading"
+           IsEmpty="@(!_loading && _categories.Count == 0)">
     <Toolbar>
-        <span class="op-badge op-badge--muted">@PlaceholderData.Categories.Count total</span>
+        <span class="op-badge op-badge--muted">@_categories.Count total</span>
     </Toolbar>
     <Columns>
         <th scope="col">Name</th>
@@ -33,7 +43,7 @@
                     Description="Categories are seeded once per deployment. Add Vegetables, Fish and seafood, Meat, Fruit, Rice and grains, and Dry goods to get a market bidding." />
     </EmptyContent>
     <ChildContent>
-        @foreach (var category in PlaceholderData.Categories)
+        @foreach (var category in _categories)
         {
             <tr>
                 <td class="cell-strong">@category.Name</td>
@@ -43,10 +53,168 @@
                 <td><StatusBadge Status="@(category.IsActive ? "Active" : "Inactive")" /></td>
                 <td class="actions">
                     <div class="btn-row">
-                        <button type="button" class="op-btn op-btn--sm" disabled>Edit</button>
+                        <button type="button" class="op-btn op-btn--sm" @onclick="() => OpenEdit(category)">Edit</button>
                     </div>
                 </td>
             </tr>
         }
     </ChildContent>
 </DataPanel>
+
+@if (_showForm)
+{
+    <div class="op-modal-layer">
+        <div class="op-modal-backdrop" @onclick="CloseForm"></div>
+        <div class="op-modal" role="dialog" aria-modal="true" aria-labelledby="category-form-title">
+            <h2 class="op-modal__title" id="category-form-title">@(_editingId is null ? "New category" : "Edit category")</h2>
+
+            @if (_formError is not null)
+            {
+                <div class="notice notice--error" role="alert">
+                    <span class="notice__glyph" aria-hidden="true">⚠</span>
+                    <span>@_formError</span>
+                </div>
+            }
+
+            <div class="field">
+                <label class="field__label" for="category-name">Name</label>
+                <input id="category-name" class="field__control" @bind="_formName" @bind:event="oninput" disabled="@_saving" />
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="category-slug">Slug</label>
+                <input id="category-slug" class="field__control mono" @bind="_formSlug" @bind:event="oninput" disabled="@_saving" />
+                <span class="field__hint">Lowercase letters, digits and hyphens, e.g. 'fish-seafood'.</span>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="category-sort">Sort order</label>
+                <input id="category-sort" class="field__control" type="number" @bind="_formSortOrder" disabled="@_saving" />
+            </div>
+
+            @if (_editingId is not null)
+            {
+                <div class="field field--inline">
+                    <input id="category-active" type="checkbox" @bind="_formIsActive" disabled="@_saving" />
+                    <label for="category-active">Active</label>
+                </div>
+            }
+
+            <div class="op-modal__actions">
+                <button type="button" class="op-btn op-btn--ghost" @onclick="CloseForm" disabled="@_saving">Cancel</button>
+                <button type="button" class="op-btn op-btn--primary" @onclick="SaveAsync" disabled="@_saving">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<CategoryRow> _categories = [];
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _showForm;
+    private bool _saving;
+    private string? _formError;
+    private long? _editingId;
+    private string _formName = string.Empty;
+    private string _formSlug = string.Empty;
+    private int _formSortOrder;
+    private bool _formIsActive = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var categories = await Api.GetAsync<IReadOnlyList<CategoryDto>>("/api/admin/categories");
+            var items = await Api.GetAsync<IReadOnlyList<ItemDto>>("/api/admin/items");
+            var itemCounts = items.GroupBy(i => i.CategoryId).ToDictionary(g => g.Key, g => g.Count());
+
+            _categories = categories
+                .Select(c => new CategoryRow(
+                    c.Id, c.Name, c.Slug, itemCounts.GetValueOrDefault(c.Id), c.SortOrder, c.IsActive))
+                .OrderBy(c => c.SortOrder)
+                .ToList();
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _editingId = null;
+        _formName = string.Empty;
+        _formSlug = string.Empty;
+        _formSortOrder = _categories.Count == 0 ? 1 : _categories.Max(c => c.SortOrder) + 1;
+        _formIsActive = true;
+        _formError = null;
+        _showForm = true;
+    }
+
+    private void OpenEdit(CategoryRow category)
+    {
+        _editingId = category.Id;
+        _formName = category.Name;
+        _formSlug = category.Slug;
+        _formSortOrder = category.SortOrder;
+        _formIsActive = category.IsActive;
+        _formError = null;
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _showForm = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _formError = null;
+
+        try
+        {
+            if (_editingId is { } id)
+            {
+                await Api.PutAsync<CategoryDto>(
+                    $"/api/admin/categories/{id}",
+                    new UpdateCategoryRequest(_formName, _formSlug, _formSortOrder, _formIsActive));
+            }
+            else
+            {
+                await Api.PostAsync<CategoryDto>(
+                    "/api/admin/categories",
+                    new CreateCategoryRequest(_formName, _formSlug, _formSortOrder));
+            }
+
+            _showForm = false;
+            await LoadAsync();
+        }
+        catch (AdminApiException ex)
+        {
+            _formError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

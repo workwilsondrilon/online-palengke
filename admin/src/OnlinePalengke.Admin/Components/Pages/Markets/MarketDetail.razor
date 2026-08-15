@@ -1,26 +1,46 @@
-@page "/markets/{MarketId:int}"
+@page "/markets/{MarketId:long}"
 @attribute [Authorize]
+@inject AdminApiClient Api
 
 <PageTitle>@(_market?.Name ?? "Market") · Online Palengke Admin</PageTitle>
 
-@if (_market is { } market)
+@if (_notFound)
 {
-    <PageHeader Title="@market.Name"
-                Description="@($"{market.City}, {market.Province} · {market.VerifiedStalls} verified stalls")">
+    <PageHeader Title="Market not found">
+        <Breadcrumb>
+            <a href="markets">Markets</a> Not found
+        </Breadcrumb>
+    </PageHeader>
+
+    <div class="panel">
+        <div class="panel__body">
+            <EmptyState Glyph="⌂"
+                        Title="That market does not exist"
+                        Description="No market carries that id. The link may be stale.">
+                <Actions>
+                    <a class="op-btn op-btn--primary" href="markets">Back to markets</a>
+                </Actions>
+            </EmptyState>
+        </div>
+    </div>
+}
+else if (_market is { } market)
+{
+    <PageHeader Title="@market.Name" Description="@($"{market.City}, {market.Province}")">
         <Breadcrumb>
             <a href="markets">Markets</a> @market.Name
         </Breadcrumb>
         <Actions>
             <StatusBadge Status="@market.Status" />
-            <button type="button" class="op-btn" disabled>Edit market</button>
+            <button type="button" class="op-btn" @onclick="OpenEditMarket">Edit market</button>
         </Actions>
     </PageHeader>
 
-    @if (_lastAction is not null)
+    @if (_error is not null)
     {
-        <div class="notice notice--warning" role="status">
+        <div class="notice notice--error" role="alert">
             <span class="notice__glyph" aria-hidden="true">⚠</span>
-            <span>@_lastAction</span>
+            <span>@_error</span>
         </div>
     }
 
@@ -36,18 +56,16 @@
                         </p>
                     </div>
                     <div class="panel__toolbar">
-                        <button type="button" class="op-btn op-btn--sm" disabled>Draw polygon</button>
-                        <button type="button" class="op-btn op-btn--sm" disabled>Clear</button>
-                        <button type="button" class="op-btn op-btn--sm op-btn--primary" disabled>Save area</button>
+                        <button type="button" class="op-btn op-btn--sm" @onclick="ClearArea" disabled="@_savingArea">Clear</button>
+                        <button type="button" class="op-btn op-btn--sm op-btn--primary" @onclick="SaveAreaAsync" disabled="@_savingArea">
+                            @(_savingArea ? "Saving…" : "Save area")
+                        </button>
                     </div>
                 </div>
                 <div class="panel__body">
                     <ServiceAreaMap MarketId="market.Id"
-                                    InitialPolygonGeoJson="@(market.HasServiceArea ? SamplePolygonGeoJson : null)" />
-                </div>
-                <div class="panel__foot">
-                    Shell build. The map above is a real Leaflet.draw editor; the toolbar buttons and
-                    save action here are still bound to <span class="mono">PlaceholderData</span>, not the API.
+                                    InitialPolygonGeoJson="@_pendingGeoJson"
+                                    OnPolygonChanged="OnPolygonChanged" />
                 </div>
             </section>
 
@@ -56,7 +74,7 @@
                        Caption="Delivery windows for this market"
                        IsEmpty="@(_windows.Count == 0)">
                 <Toolbar>
-                    <button type="button" class="op-btn op-btn--sm op-btn--primary" disabled>Add window</button>
+                    <button type="button" class="op-btn op-btn--sm op-btn--primary" @onclick="OpenCreateWindow">Add window</button>
                 </Toolbar>
                 <Columns>
                     <th scope="col">Label</th>
@@ -84,7 +102,7 @@
                             <td><StatusBadge Status="@(window.IsActive ? "Active" : "Inactive")" /></td>
                             <td class="actions">
                                 <div class="btn-row">
-                                    <button type="button" class="op-btn op-btn--sm" disabled>Edit</button>
+                                    <button type="button" class="op-btn op-btn--sm" @onclick="() => OpenEditWindow(window)">Edit</button>
                                     <button type="button" class="op-btn op-btn--sm" @onclick="() => ConfirmRemove(window)">Remove</button>
                                 </div>
                             </td>
@@ -106,14 +124,14 @@
                         <dt>Market id</dt>
                         <dd class="mono">@market.Id</dd>
 
+                        <dt>Address</dt>
+                        <dd>@market.Address</dd>
+
                         <dt>City</dt>
                         <dd>@market.City</dd>
 
                         <dt>Province</dt>
                         <dd>@market.Province</dd>
-
-                        <dt>Verified stalls</dt>
-                        <dd>@market.VerifiedStalls</dd>
 
                         <dt>Delivery windows</dt>
                         <dd>@_windows.Count</dd>
@@ -129,78 +147,393 @@
                     </dl>
                 </div>
             </section>
-
-            <div class="notice notice--info">
-                <span class="notice__glyph" aria-hidden="true">ℹ</span>
-                <span>
-                    <strong>Shell build.</strong> Editing controls are disabled until this page is wired
-                    to the Application layer. The map host, the windows table and the confirmation dialog
-                    are the three seams that need real handlers.
-                </span>
-            </div>
         </div>
     </div>
 
     <ConfirmDialog @ref="_confirmDialog" OnConfirm="HandleRemoveConfirmed" />
-}
-else
-{
-    <PageHeader Title="Market not found">
-        <Breadcrumb>
-            <a href="markets">Markets</a> Not found
-        </Breadcrumb>
-    </PageHeader>
 
-    <div class="panel">
-        <div class="panel__body">
-            <EmptyState Glyph="⌂"
-                        Title="That market does not exist"
-                        Description="No market in this build carries that id. The link may be stale.">
-                <Actions>
-                    <a class="op-btn op-btn--primary" href="markets">Back to markets</a>
-                </Actions>
-            </EmptyState>
+    @if (_showMarketForm)
+    {
+        <div class="op-modal-layer">
+            <div class="op-modal-backdrop" @onclick="CloseMarketForm"></div>
+            <div class="op-modal" role="dialog" aria-modal="true" aria-labelledby="market-edit-title">
+                <h2 class="op-modal__title" id="market-edit-title">Edit market</h2>
+
+                @if (_formError is not null)
+                {
+                    <div class="notice notice--error" role="alert">
+                        <span class="notice__glyph" aria-hidden="true">⚠</span>
+                        <span>@_formError</span>
+                    </div>
+                }
+
+                <div class="field">
+                    <label class="field__label" for="market-edit-name">Name</label>
+                    <input id="market-edit-name" class="field__control" @bind="_formName" @bind:event="oninput" disabled="@_saving" />
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="market-edit-address">Address</label>
+                    <input id="market-edit-address" class="field__control" @bind="_formAddress" @bind:event="oninput" disabled="@_saving" />
+                </div>
+
+                <div class="field-grid">
+                    <div class="field">
+                        <label class="field__label" for="market-edit-city">City</label>
+                        <input id="market-edit-city" class="field__control" @bind="_formCity" @bind:event="oninput" disabled="@_saving" />
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="market-edit-province">Province</label>
+                        <input id="market-edit-province" class="field__control" @bind="_formProvince" @bind:event="oninput" disabled="@_saving" />
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="market-edit-lat">Latitude</label>
+                        <input id="market-edit-lat" class="field__control" type="number" step="0.000001" @bind="_formLat" disabled="@_saving" />
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="market-edit-lng">Longitude</label>
+                        <input id="market-edit-lng" class="field__control" type="number" step="0.000001" @bind="_formLng" disabled="@_saving" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="market-edit-status">Status</label>
+                    <select id="market-edit-status" class="field__control" @bind="_formStatus" disabled="@_saving">
+                        <option value="onboarding">Onboarding</option>
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                    </select>
+                    <span class="field__hint">Activating requires a saved delivery service area.</span>
+                </div>
+
+                <div class="op-modal__actions">
+                    <button type="button" class="op-btn op-btn--ghost" @onclick="CloseMarketForm" disabled="@_saving">Cancel</button>
+                    <button type="button" class="op-btn op-btn--primary" @onclick="SaveMarketAsync" disabled="@_saving">
+                        @(_saving ? "Saving…" : "Save")
+                    </button>
+                </div>
+            </div>
         </div>
-    </div>
+    }
+
+    @if (_showWindowForm)
+    {
+        <div class="op-modal-layer">
+            <div class="op-modal-backdrop" @onclick="CloseWindowForm"></div>
+            <div class="op-modal" role="dialog" aria-modal="true" aria-labelledby="window-form-title">
+                <h2 class="op-modal__title" id="window-form-title">@(_editingWindowId is null ? "Add delivery window" : "Edit delivery window")</h2>
+
+                @if (_formError is not null)
+                {
+                    <div class="notice notice--error" role="alert">
+                        <span class="notice__glyph" aria-hidden="true">⚠</span>
+                        <span>@_formError</span>
+                    </div>
+                }
+
+                <div class="field">
+                    <label class="field__label" for="window-label">Label</label>
+                    <input id="window-label" class="field__control" @bind="_formLabel" @bind:event="oninput" disabled="@_saving" placeholder="e.g. 7-9 AM" />
+                </div>
+
+                <div class="field-grid">
+                    <div class="field">
+                        <label class="field__label" for="window-starts">Opens</label>
+                        <input id="window-starts" class="field__control" type="time" @bind="_formStartsAt" disabled="@_saving" />
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="window-ends">Closes</label>
+                        <input id="window-ends" class="field__control" type="time" @bind="_formEndsAt" disabled="@_saving" />
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="window-cutoff">Cutoff</label>
+                        <div class="input-suffix">
+                            <input id="window-cutoff" class="field__control" type="number" min="0" @bind="_formCutoffMinutes" disabled="@_saving" />
+                            <span class="input-suffix__unit">min before</span>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="window-capacity">Capacity</label>
+                        <input id="window-capacity" class="field__control" type="number" min="1" @bind="_formCapacity" disabled="@_saving" />
+                    </div>
+                </div>
+
+                @if (_editingWindowId is not null)
+                {
+                    <div class="field field--inline">
+                        <input id="window-active" type="checkbox" @bind="_formWindowIsActive" disabled="@_saving" />
+                        <label for="window-active">Active</label>
+                    </div>
+                }
+
+                <div class="op-modal__actions">
+                    <button type="button" class="op-btn op-btn--ghost" @onclick="CloseWindowForm" disabled="@_saving">Cancel</button>
+                    <button type="button" class="op-btn op-btn--primary" @onclick="SaveWindowAsync" disabled="@_saving">
+                        @(_saving ? "Saving…" : "Save")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 }
 
 @code {
-    // A rough box over Balintawak, purely so the placeholder can say an area already exists.
-    private const string SamplePolygonGeoJson =
-        "{\"type\":\"Polygon\",\"coordinates\":[[[120.985,14.655],[121.015,14.655],[121.015,14.680],[120.985,14.680],[120.985,14.655]]]}";
-
     private ConfirmDialog? _confirmDialog;
-    private MarketRow? _market;
-    private IReadOnlyList<DeliveryWindowRow> _windows = [];
-    private DeliveryWindowRow? _pendingRemoval;
-    private string? _lastAction;
+    private MarketDto? _market;
+    private IReadOnlyList<DeliveryWindowDto> _windows = [];
+    private DeliveryWindowDto? _pendingRemoval;
+    private bool _notFound;
+    private string? _error;
+    private string? _pendingGeoJson;
+    private bool _savingArea;
+
+    private bool _showMarketForm;
+    private bool _showWindowForm;
+    private bool _saving;
+    private string? _formError;
+
+    private string _formName = string.Empty;
+    private string _formAddress = string.Empty;
+    private string _formCity = string.Empty;
+    private string _formProvince = string.Empty;
+    private decimal _formLat;
+    private decimal _formLng;
+    private string _formStatus = "onboarding";
+
+    private long? _editingWindowId;
+    private string _formLabel = string.Empty;
+    private TimeOnly _formStartsAt = new(7, 0);
+    private TimeOnly _formEndsAt = new(9, 0);
+    private int _formCutoffMinutes = 90;
+    private int _formCapacity = 20;
+    private bool _formWindowIsActive = true;
 
     /// <summary>Route parameter: the market being inspected.</summary>
     [Parameter]
-    public int MarketId { get; set; }
+    public long MarketId { get; set; }
 
-    protected override void OnParametersSet()
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
     {
-        _market = PlaceholderData.FindMarket(MarketId);
-        _windows = _market is null ? [] : PlaceholderData.DeliveryWindowsFor(MarketId);
-        _lastAction = null;
+        _error = null;
+
+        try
+        {
+            _market = await Api.GetAsync<MarketDto>($"/api/admin/markets/{MarketId}");
+            _pendingGeoJson = _market.ServiceAreaGeoJson;
+            _windows = await Api.GetAsync<IReadOnlyList<DeliveryWindowDto>>($"/api/admin/markets/{MarketId}/delivery-windows");
+            _notFound = false;
+        }
+        catch (AdminApiException ex) when (ex.StatusCode == 404)
+        {
+            _notFound = true;
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
     }
 
-    private void ConfirmRemove(DeliveryWindowRow window)
+    private void OnPolygonChanged(string geoJson)
+    {
+        _pendingGeoJson = string.IsNullOrEmpty(geoJson) ? null : geoJson;
+    }
+
+    private void ClearArea() => _pendingGeoJson = null;
+
+    private async Task SaveAreaAsync()
+    {
+        if (_market is null)
+        {
+            return;
+        }
+
+        _savingArea = true;
+        _error = null;
+
+        try
+        {
+            _market = await Api.PutAsync<MarketDto>(
+                $"/api/admin/markets/{_market.Id}/service-area",
+                new UpdateServiceAreaRequest(_pendingGeoJson));
+            _pendingGeoJson = _market.ServiceAreaGeoJson;
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _savingArea = false;
+        }
+    }
+
+    private void OpenEditMarket()
+    {
+        if (_market is not { } market)
+        {
+            return;
+        }
+
+        _formName = market.Name;
+        _formAddress = market.Address;
+        _formCity = market.City;
+        _formProvince = market.Province;
+        _formLat = market.Lat;
+        _formLng = market.Lng;
+        _formStatus = market.Status;
+        _formError = null;
+        _showMarketForm = true;
+    }
+
+    private void CloseMarketForm()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _showMarketForm = false;
+    }
+
+    private async Task SaveMarketAsync()
+    {
+        if (_market is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _formError = null;
+
+        try
+        {
+            _market = await Api.PutAsync<MarketDto>(
+                $"/api/admin/markets/{_market.Id}",
+                new UpdateMarketRequest(_formName, _formAddress, _formCity, _formProvince, _formLat, _formLng, _formStatus));
+            _showMarketForm = false;
+        }
+        catch (AdminApiException ex)
+        {
+            _formError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void OpenCreateWindow()
+    {
+        _editingWindowId = null;
+        _formLabel = string.Empty;
+        _formStartsAt = new TimeOnly(7, 0);
+        _formEndsAt = new TimeOnly(9, 0);
+        _formCutoffMinutes = 90;
+        _formCapacity = 20;
+        _formWindowIsActive = true;
+        _formError = null;
+        _showWindowForm = true;
+    }
+
+    private void OpenEditWindow(DeliveryWindowDto window)
+    {
+        _editingWindowId = window.Id;
+        _formLabel = window.Label;
+        _formStartsAt = window.StartsAt;
+        _formEndsAt = window.EndsAt;
+        _formCutoffMinutes = window.CutoffOffsetMinutes;
+        _formCapacity = window.Capacity;
+        _formWindowIsActive = window.IsActive;
+        _formError = null;
+        _showWindowForm = true;
+    }
+
+    private void CloseWindowForm()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _showWindowForm = false;
+    }
+
+    private async Task SaveWindowAsync()
+    {
+        if (_market is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _formError = null;
+
+        try
+        {
+            if (_editingWindowId is { } id)
+            {
+                await Api.PutAsync<DeliveryWindowDto>(
+                    $"/api/admin/delivery-windows/{id}",
+                    new UpdateDeliveryWindowRequest(_formLabel, _formStartsAt, _formEndsAt, _formCutoffMinutes, _formCapacity, _formWindowIsActive));
+            }
+            else
+            {
+                await Api.PostAsync<DeliveryWindowDto>(
+                    $"/api/admin/markets/{_market.Id}/delivery-windows",
+                    new CreateDeliveryWindowRequest(_formLabel, _formStartsAt, _formEndsAt, _formCutoffMinutes, _formCapacity));
+            }
+
+            _windows = await Api.GetAsync<IReadOnlyList<DeliveryWindowDto>>($"/api/admin/markets/{_market.Id}/delivery-windows");
+            _showWindowForm = false;
+        }
+        catch (AdminApiException ex)
+        {
+            _formError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ConfirmRemove(DeliveryWindowDto window)
     {
         _pendingRemoval = window;
         _confirmDialog?.Show(
             title: $"Remove the {window.Label} window?",
             message: "Customers lose this booking slot immediately. Orders already placed inside it are unaffected.",
             confirmText: "Remove window",
-            destructive: true,
-            requiresReason: true);
+            destructive: true);
     }
 
-    private void HandleRemoveConfirmed(string reason)
+    private async Task HandleRemoveConfirmed(string reason)
     {
-        var label = _pendingRemoval?.Label ?? "window";
+        _ = reason;
+
+        if (_pendingRemoval is not { } window || _market is null)
+        {
+            return;
+        }
+
         _pendingRemoval = null;
-        _lastAction = $"Not wired yet — removing the {label} window (reason: {reason.Trim()}) will call the Application layer once it exists.";
+        _error = null;
+
+        try
+        {
+            await Api.DeleteAsync($"/api/admin/delivery-windows/{window.Id}");
+            _windows = await Api.GetAsync<IReadOnlyList<DeliveryWindowDto>>($"/api/admin/markets/{_market.Id}/delivery-windows");
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
     }
 }

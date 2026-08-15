@@ -1,6 +1,7 @@
 @page "/catalog/items"
 @attribute [Authorize]
 @using System.Globalization
+@inject AdminApiClient Api
 
 <PageTitle>Items · Online Palengke Admin</PageTitle>
 
@@ -10,7 +11,7 @@
         <a href="catalog/categories">Catalog</a> Items
     </Breadcrumb>
     <Actions>
-        <button type="button" class="op-btn op-btn--primary" disabled>New item</button>
+        <button type="button" class="op-btn op-btn--primary" @onclick="OpenCreate" disabled="@(_categories.Count == 0 || _units.Count == 0)">New item</button>
     </Actions>
 </PageHeader>
 
@@ -23,9 +24,18 @@
     </span>
 </div>
 
+@if (_error is not null)
+{
+    <div class="notice notice--error" role="alert">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_error</span>
+    </div>
+}
+
 <DataPanel Title="All items"
            Caption="Item master, without prices"
-           IsEmpty="@(_filtered.Count == 0)">
+           IsLoading="_loading"
+           IsEmpty="@(!_loading && _filtered.Count == 0)">
     <Toolbar>
         <div class="search">
             <span class="search__glyph" aria-hidden="true">⌕</span>
@@ -37,7 +47,7 @@
                    value="@_query"
                    @oninput="OnQueryChanged" />
         </div>
-        <span class="op-badge op-badge--muted">@_filtered.Count of @PlaceholderData.Items.Count</span>
+        <span class="op-badge op-badge--muted">@_filtered.Count of @_items.Count</span>
     </Toolbar>
     <Columns>
         <th scope="col">Photo</th>
@@ -72,7 +82,7 @@
                 <td><StatusBadge Status="@(item.IsActive ? "Active" : "Inactive")" /></td>
                 <td class="actions">
                     <div class="btn-row">
-                        <button type="button" class="op-btn op-btn--sm" disabled>Edit</button>
+                        <button type="button" class="op-btn op-btn--sm" @onclick="() => OpenEditAsync(item.Id)">Edit</button>
                     </div>
                 </td>
             </tr>
@@ -83,8 +93,110 @@
     </Footer>
 </DataPanel>
 
+@if (_showForm)
+{
+    <div class="op-modal-layer">
+        <div class="op-modal-backdrop" @onclick="CloseForm"></div>
+        <div class="op-modal" role="dialog" aria-modal="true" aria-labelledby="item-form-title">
+            <h2 class="op-modal__title" id="item-form-title">@(_editingId is null ? "New item" : "Edit item")</h2>
+
+            @if (_formError is not null)
+            {
+                <div class="notice notice--error" role="alert">
+                    <span class="notice__glyph" aria-hidden="true">⚠</span>
+                    <span>@_formError</span>
+                </div>
+            }
+
+            <div class="field">
+                <label class="field__label" for="item-name">Name</label>
+                <input id="item-name" class="field__control" @bind="_formName" @bind:event="oninput" disabled="@_saving" />
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="item-category">Category</label>
+                <select id="item-category" class="field__control" @bind="_formCategoryId" disabled="@_saving">
+                    @foreach (var category in _categories)
+                    {
+                        <option value="@category.Id">@category.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="item-weight">Weight per unit</label>
+                <div class="input-suffix">
+                    <input id="item-weight" class="field__control" type="number" step="0.001" min="0.001" @bind="_formWeightPerUnitKg" disabled="@_saving" />
+                    <span class="input-suffix__unit">kg</span>
+                </div>
+            </div>
+
+            <div class="field">
+                <span class="field__label">Units this item may be ordered in</span>
+                @foreach (var unit in _units)
+                {
+                    <div class="field field--inline">
+                        <input id="@($"item-unit-{unit.Id}")" type="checkbox"
+                               checked="@_formUnitIds.Contains(unit.Id)"
+                               @onchange="@(e => ToggleUnit(unit.Id, (bool)e.Value!))"
+                               disabled="@_saving" />
+                        <label for="@($"item-unit-{unit.Id}")">@unit.Code — @unit.Name</label>
+                    </div>
+                }
+            </div>
+
+            @if (_formUnitIds.Count > 0)
+            {
+                <div class="field">
+                    <label class="field__label" for="item-default-unit">Default unit</label>
+                    <select id="item-default-unit" class="field__control" @bind="_formDefaultUnitId" disabled="@_saving">
+                        @foreach (var unitId in _formUnitIds)
+                        {
+                            var unit = _units.First(u => u.Id == unitId);
+                            <option value="@unit.Id">@unit.Code — @unit.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_editingId is not null)
+            {
+                <div class="field field--inline">
+                    <input id="item-active" type="checkbox" @bind="_formIsActive" disabled="@_saving" />
+                    <label for="item-active">Active</label>
+                </div>
+            }
+
+            <div class="op-modal__actions">
+                <button type="button" class="op-btn op-btn--ghost" @onclick="CloseForm" disabled="@_saving">Cancel</button>
+                <button type="button" class="op-btn op-btn--primary" @onclick="SaveAsync" disabled="@(_saving || _formUnitIds.Count == 0)">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+    private IReadOnlyList<ItemRow> _items = [];
+    private IReadOnlyList<ItemDto> _itemDetails = [];
+    private IReadOnlyList<CategoryDto> _categories = [];
+    private IReadOnlyList<UnitDto> _units = [];
+    private IReadOnlyList<ItemRow> _filtered = [];
+    private bool _loading = true;
+    private string? _error;
     private string _query = string.Empty;
+
+    private bool _showForm;
+    private bool _saving;
+    private string? _formError;
+    private long? _editingId;
+    private string _formName = string.Empty;
+    private long _formCategoryId;
+    private decimal _formWeightPerUnitKg = 1m;
+    private readonly HashSet<long> _formUnitIds = [];
+    private long _formDefaultUnitId;
+    private bool _formIsActive = true;
 
     private string EmptyTitle => string.IsNullOrWhiteSpace(_query)
         ? "No items in the master yet"
@@ -93,17 +205,166 @@
     private string EmptyDescription => string.IsNullOrWhiteSpace(_query)
         ? "Add the produce, meat and seafood customers will pick from. Items are shared across every market."
         : "Try a shorter search term, or clear the box to see the full item master.";
-    private IReadOnlyList<ItemRow> _filtered = PlaceholderData.Items;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _categories = await Api.GetAsync<IReadOnlyList<CategoryDto>>("/api/admin/categories");
+            _units = await Api.GetAsync<IReadOnlyList<UnitDto>>("/api/admin/units");
+            _itemDetails = await Api.GetAsync<IReadOnlyList<ItemDto>>("/api/admin/items");
+
+            _items = _itemDetails.Select(ToRow).OrderBy(i => i.Name).ToList();
+            ApplyFilter();
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static ItemRow ToRow(ItemDto item)
+    {
+        var defaultUnit = item.Units.FirstOrDefault(u => u.IsDefault) ?? item.Units.FirstOrDefault();
+        return new ItemRow(
+            item.Id, item.Name, item.CategoryName, defaultUnit?.UnitCode ?? "—", item.WeightPerUnitKg, item.ImageUrl, item.IsActive);
+    }
 
     private void OnQueryChanged(ChangeEventArgs args)
     {
         _query = args.Value?.ToString() ?? string.Empty;
+        ApplyFilter();
+    }
 
+    private void ApplyFilter()
+    {
         _filtered = string.IsNullOrWhiteSpace(_query)
-            ? PlaceholderData.Items
-            : PlaceholderData.Items
+            ? _items
+            : _items
                 .Where(i => i.Name.Contains(_query, StringComparison.OrdinalIgnoreCase)
                          || i.CategoryName.Contains(_query, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+    }
+
+    private void OpenCreate()
+    {
+        _editingId = null;
+        _formName = string.Empty;
+        _formCategoryId = _categories[0].Id;
+        _formWeightPerUnitKg = 1m;
+        _formUnitIds.Clear();
+        _formDefaultUnitId = 0;
+        _formIsActive = true;
+        _formError = null;
+        _showForm = true;
+    }
+
+    private async Task OpenEditAsync(long id)
+    {
+        _formError = null;
+
+        try
+        {
+            var item = await Api.GetAsync<ItemDto>($"/api/admin/items/{id}");
+            _editingId = item.Id;
+            _formName = item.Name;
+            _formCategoryId = item.CategoryId;
+            _formWeightPerUnitKg = item.WeightPerUnitKg;
+            _formUnitIds.Clear();
+            foreach (var unit in item.Units)
+            {
+                _formUnitIds.Add(unit.UnitId);
+            }
+            _formDefaultUnitId = item.Units.FirstOrDefault(u => u.IsDefault)?.UnitId ?? item.Units.FirstOrDefault()?.UnitId ?? 0;
+            _formIsActive = item.IsActive;
+            _showForm = true;
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void ToggleUnit(long unitId, bool selected)
+    {
+        if (selected)
+        {
+            _formUnitIds.Add(unitId);
+            if (_formDefaultUnitId == 0)
+            {
+                _formDefaultUnitId = unitId;
+            }
+        }
+        else
+        {
+            _formUnitIds.Remove(unitId);
+            if (_formDefaultUnitId == unitId)
+            {
+                _formDefaultUnitId = _formUnitIds.FirstOrDefault();
+            }
+        }
+    }
+
+    private void CloseForm()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _showForm = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_formUnitIds.Count == 0)
+        {
+            return;
+        }
+
+        _saving = true;
+        _formError = null;
+
+        var unitIds = _formUnitIds.ToList();
+        var defaultUnitId = _formUnitIds.Contains(_formDefaultUnitId) ? _formDefaultUnitId : unitIds[0];
+        long? mediaAssetId = _editingId is { } editingId
+            ? _itemDetails.FirstOrDefault(i => i.Id == editingId)?.MediaAssetId
+            : null;
+
+        try
+        {
+            if (_editingId is { } id)
+            {
+                await Api.PutAsync<ItemDto>(
+                    $"/api/admin/items/{id}",
+                    new UpdateItemRequest(_formCategoryId, _formName, mediaAssetId, _formWeightPerUnitKg, _formIsActive, unitIds, defaultUnitId));
+            }
+            else
+            {
+                await Api.PostAsync<ItemDto>(
+                    "/api/admin/items",
+                    new CreateItemRequest(_formCategoryId, _formName, mediaAssetId, _formWeightPerUnitKg, unitIds, defaultUnitId));
+            }
+
+            _showForm = false;
+            await LoadAsync();
+        }
+        catch (AdminApiException ex)
+        {
+            _formError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 }

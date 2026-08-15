@@ -1,5 +1,6 @@
 @page "/catalog/units"
 @attribute [Authorize]
+@inject AdminApiClient Api
 
 <PageTitle>Units · Online Palengke Admin</PageTitle>
 
@@ -9,13 +10,22 @@
         <a href="catalog/items">Catalog</a> Units
     </Breadcrumb>
     <Actions>
-        <button type="button" class="op-btn op-btn--primary" disabled>New unit</button>
+        <button type="button" class="op-btn op-btn--primary" @onclick="OpenCreate">New unit</button>
     </Actions>
 </PageHeader>
 
+@if (_error is not null)
+{
+    <div class="notice notice--error" role="alert">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_error</span>
+    </div>
+}
+
 <DataPanel Title="All units"
            Caption="Units of measure"
-           IsEmpty="@(PlaceholderData.Units.Count == 0)">
+           IsLoading="_loading"
+           IsEmpty="@(!_loading && _units.Count == 0)">
     <Columns>
         <th scope="col">Code</th>
         <th scope="col">Name</th>
@@ -29,7 +39,7 @@
                     Description="A market cannot go live without units. The usual starting set is kg, g, pc, bundle (bigkis), tray, sack and litre." />
     </EmptyContent>
     <ChildContent>
-        @foreach (var unit in PlaceholderData.Units)
+        @foreach (var unit in _units)
         {
             <tr>
                 <td class="mono cell-strong">@unit.Code</td>
@@ -38,10 +48,164 @@
                 <td><StatusBadge Status="@(unit.IsActive ? "Active" : "Inactive")" /></td>
                 <td class="actions">
                     <div class="btn-row">
-                        <button type="button" class="op-btn op-btn--sm" disabled>Edit</button>
+                        <button type="button" class="op-btn op-btn--sm" @onclick="() => OpenEdit(unit)">Edit</button>
                     </div>
                 </td>
             </tr>
         }
     </ChildContent>
 </DataPanel>
+
+@if (_showForm)
+{
+    <div class="op-modal-layer">
+        <div class="op-modal-backdrop" @onclick="CloseForm"></div>
+        <div class="op-modal" role="dialog" aria-modal="true" aria-labelledby="unit-form-title">
+            <h2 class="op-modal__title" id="unit-form-title">@(_editingId is null ? "New unit" : "Edit unit")</h2>
+
+            @if (_formError is not null)
+            {
+                <div class="notice notice--error" role="alert">
+                    <span class="notice__glyph" aria-hidden="true">⚠</span>
+                    <span>@_formError</span>
+                </div>
+            }
+
+            <div class="field">
+                <label class="field__label" for="unit-code">Code</label>
+                <input id="unit-code" class="field__control mono" @bind="_formCode" @bind:event="oninput" disabled="@_saving" />
+                <span class="field__hint">Short, e.g. 'kg', 'pc', 'bundle'.</span>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="unit-name">Name</label>
+                <input id="unit-name" class="field__control" @bind="_formName" @bind:event="oninput" disabled="@_saving" />
+            </div>
+
+            <div class="field field--inline">
+                <input id="unit-fractional" type="checkbox" @bind="_formAllowsFractional" disabled="@_saving" />
+                <label for="unit-fractional">Allows fractional quantities (e.g. 1.5 kg)</label>
+            </div>
+
+            @if (_editingId is not null)
+            {
+                <div class="field field--inline">
+                    <input id="unit-active" type="checkbox" @bind="_formIsActive" disabled="@_saving" />
+                    <label for="unit-active">Active</label>
+                </div>
+            }
+
+            <div class="op-modal__actions">
+                <button type="button" class="op-btn op-btn--ghost" @onclick="CloseForm" disabled="@_saving">Cancel</button>
+                <button type="button" class="op-btn op-btn--primary" @onclick="SaveAsync" disabled="@_saving">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<UnitRow> _units = [];
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _showForm;
+    private bool _saving;
+    private string? _formError;
+    private long? _editingId;
+    private string _formCode = string.Empty;
+    private string _formName = string.Empty;
+    private bool _formAllowsFractional;
+    private bool _formIsActive = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var units = await Api.GetAsync<IReadOnlyList<UnitDto>>("/api/admin/units");
+            _units = units
+                .Select(u => new UnitRow(u.Id, u.Code, u.Name, u.AllowsFractionalQuantity, u.IsActive))
+                .OrderBy(u => u.Code)
+                .ToList();
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _editingId = null;
+        _formCode = string.Empty;
+        _formName = string.Empty;
+        _formAllowsFractional = false;
+        _formIsActive = true;
+        _formError = null;
+        _showForm = true;
+    }
+
+    private void OpenEdit(UnitRow unit)
+    {
+        _editingId = unit.Id;
+        _formCode = unit.Code;
+        _formName = unit.Name;
+        _formAllowsFractional = unit.AllowsFractionalQuantity;
+        _formIsActive = unit.IsActive;
+        _formError = null;
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _showForm = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _formError = null;
+
+        try
+        {
+            if (_editingId is { } id)
+            {
+                await Api.PutAsync<UnitDto>(
+                    $"/api/admin/units/{id}",
+                    new UpdateUnitRequest(_formCode, _formName, _formAllowsFractional, _formIsActive));
+            }
+            else
+            {
+                await Api.PostAsync<UnitDto>(
+                    "/api/admin/units",
+                    new CreateUnitRequest(_formCode, _formName, _formAllowsFractional));
+            }
+
+            _showForm = false;
+            await LoadAsync();
+        }
+        catch (AdminApiException ex)
+        {
+            _formError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

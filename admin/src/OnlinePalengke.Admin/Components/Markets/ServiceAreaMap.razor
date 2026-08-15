@@ -25,7 +25,7 @@
 
     /// <summary>Market whose service area is being edited.</summary>
     [Parameter, EditorRequired]
-    public int MarketId { get; set; }
+    public long MarketId { get; set; }
 
     /// <summary>Existing polygon as GeoJSON, or null when the market has no area yet.</summary>
     [Parameter]

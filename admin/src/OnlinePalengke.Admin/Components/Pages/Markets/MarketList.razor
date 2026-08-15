@@ -1,25 +1,35 @@
 @page "/markets"
 @attribute [Authorize]
+@inject AdminApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>Markets · Online Palengke Admin</PageTitle>
 
 <PageHeader Title="Markets"
             Description="Every wet market in the network. A market owns its verified stalls, its delivery service area and the delivery windows customers can book.">
     <Actions>
-        <button type="button" class="op-btn op-btn--primary" disabled>Add market</button>
+        <button type="button" class="op-btn op-btn--primary" @onclick="OpenCreate">Add market</button>
     </Actions>
 </PageHeader>
 
+@if (_error is not null)
+{
+    <div class="notice notice--error" role="alert">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_error</span>
+    </div>
+}
+
 <DataPanel Title="All markets"
            Caption="Markets with stall counts and service-area status"
-           IsEmpty="@(PlaceholderData.Markets.Count == 0)">
+           IsLoading="_loading"
+           IsEmpty="@(!_loading && _markets.Count == 0)">
     <Toolbar>
-        <span class="op-badge op-badge--muted">@PlaceholderData.Markets.Count total</span>
+        <span class="op-badge op-badge--muted">@_markets.Count total</span>
     </Toolbar>
     <Columns>
         <th scope="col">Market</th>
         <th scope="col">Location</th>
-        <th scope="col" class="num">Verified stalls</th>
         <th scope="col" class="num">Windows</th>
         <th scope="col">Service area</th>
         <th scope="col">Status</th>
@@ -31,7 +41,7 @@
                     Description="A market is the unit everything else hangs off: stalls bid inside it, riders are rostered to it, and delivery windows belong to it. Add the first one to begin onboarding partners." />
     </EmptyContent>
     <ChildContent>
-        @foreach (var market in PlaceholderData.Markets)
+        @foreach (var market in _markets)
         {
             <tr>
                 <td>
@@ -41,7 +51,6 @@
                     @market.City
                     <span class="cell-sub">@market.Province</span>
                 </td>
-                <td class="num">@market.VerifiedStalls</td>
                 <td class="num">@market.DeliveryWindows</td>
                 <td>
                     <StatusBadge Status="@(market.HasServiceArea ? "Active" : "Pending")"
@@ -57,3 +66,148 @@
         }
     </ChildContent>
 </DataPanel>
+
+@if (_showForm)
+{
+    <div class="op-modal-layer">
+        <div class="op-modal-backdrop" @onclick="CloseForm"></div>
+        <div class="op-modal" role="dialog" aria-modal="true" aria-labelledby="market-form-title">
+            <h2 class="op-modal__title" id="market-form-title">Add market</h2>
+
+            @if (_formError is not null)
+            {
+                <div class="notice notice--error" role="alert">
+                    <span class="notice__glyph" aria-hidden="true">⚠</span>
+                    <span>@_formError</span>
+                </div>
+            }
+
+            <div class="field">
+                <label class="field__label" for="market-name">Name</label>
+                <input id="market-name" class="field__control" @bind="_formName" @bind:event="oninput" disabled="@_saving" />
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="market-address">Address</label>
+                <input id="market-address" class="field__control" @bind="_formAddress" @bind:event="oninput" disabled="@_saving" />
+            </div>
+
+            <div class="field-grid">
+                <div class="field">
+                    <label class="field__label" for="market-city">City</label>
+                    <input id="market-city" class="field__control" @bind="_formCity" @bind:event="oninput" disabled="@_saving" />
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="market-province">Province</label>
+                    <input id="market-province" class="field__control" @bind="_formProvince" @bind:event="oninput" disabled="@_saving" />
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="market-lat">Latitude</label>
+                    <input id="market-lat" class="field__control" type="number" step="0.000001" @bind="_formLat" disabled="@_saving" />
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="market-lng">Longitude</label>
+                    <input id="market-lng" class="field__control" type="number" step="0.000001" @bind="_formLng" disabled="@_saving" />
+                </div>
+            </div>
+            <span class="field__hint">Find coordinates on any map app - long-press the market's location and copy the pin's lat/lng.</span>
+
+            <div class="op-modal__actions">
+                <button type="button" class="op-btn op-btn--ghost" @onclick="CloseForm" disabled="@_saving">Cancel</button>
+                <button type="button" class="op-btn op-btn--primary" @onclick="SaveAsync" disabled="@_saving">
+                    @(_saving ? "Creating…" : "Create market")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<MarketRow> _markets = [];
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _showForm;
+    private bool _saving;
+    private string? _formError;
+    private string _formName = string.Empty;
+    private string _formAddress = string.Empty;
+    private string _formCity = string.Empty;
+    private string _formProvince = string.Empty;
+    private decimal _formLat = 14.5995m;
+    private decimal _formLng = 120.9842m;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var markets = await Api.GetAsync<IReadOnlyList<MarketDto>>("/api/admin/markets");
+            var lists = await Task.WhenAll(markets.Select(m =>
+                Api.GetAsync<IReadOnlyList<DeliveryWindowDto>>($"/api/admin/markets/{m.Id}/delivery-windows")));
+
+            _markets = markets
+                .Zip(lists, (m, windows) => new MarketRow(
+                    m.Id, m.Name, m.City, m.Province, VerifiedStalls: 0, windows.Count, m.HasServiceArea, m.Status))
+                .OrderBy(m => m.Name)
+                .ToList();
+        }
+        catch (AdminApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _formName = string.Empty;
+        _formAddress = string.Empty;
+        _formCity = string.Empty;
+        _formProvince = string.Empty;
+        _formLat = 14.5995m;
+        _formLng = 120.9842m;
+        _formError = null;
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _showForm = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _formError = null;
+
+        try
+        {
+            var created = await Api.PostAsync<MarketDto>(
+                "/api/admin/markets",
+                new CreateMarketRequest(_formName, _formAddress, _formCity, _formProvince, _formLat, _formLng));
+
+            Navigation.NavigateTo($"markets/{created.Id}");
+        }
+        catch (AdminApiException ex)
+        {
+            _formError = ex.Message;
+            _saving = false;
+        }
+    }
+}
