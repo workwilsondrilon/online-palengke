@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using OnlinePalengke.Application.Auth;
 using OnlinePalengke.Application.Uploads;
 
 namespace OnlinePalengke.Application;
@@ -14,6 +15,10 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<UploadService>();
+
+        services.AddScoped<AuthSessionFactory>();
+        services.AddScoped<OtpAuthService>();
+        services.AddScoped<AdminAuthService>();
 
         return services;
     }
