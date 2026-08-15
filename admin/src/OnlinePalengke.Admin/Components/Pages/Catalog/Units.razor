@@ -1,0 +1,46 @@
+@page "/catalog/units"
+
+<PageTitle>Units · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Units"
+            Description="Units of measure a shopping list can request and a partner can quote against. Changing a unit after quotes exist would reinterpret historical prices, so units are append-only in practice.">
+    <Breadcrumb>
+        <a href="catalog/items">Catalog</a> Units
+    </Breadcrumb>
+    <Actions>
+        <button type="button" class="op-btn op-btn--primary" disabled>New unit</button>
+    </Actions>
+</PageHeader>
+
+<DataPanel Title="All units"
+           Caption="Units of measure"
+           IsEmpty="@(PlaceholderData.Units.Count == 0)">
+    <Columns>
+        <th scope="col">Code</th>
+        <th scope="col">Name</th>
+        <th scope="col">Fractional quantities</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="actions">Actions</th>
+    </Columns>
+    <EmptyContent>
+        <EmptyState Glyph="◌"
+                    Title="No units configured yet"
+                    Description="A market cannot go live without units. The usual starting set is kg, g, pc, bundle (bigkis), tray, sack and litre." />
+    </EmptyContent>
+    <ChildContent>
+        @foreach (var unit in PlaceholderData.Units)
+        {
+            <tr>
+                <td class="mono cell-strong">@unit.Code</td>
+                <td>@unit.Name</td>
+                <td>@(unit.AllowsFractionalQuantity ? "Allowed" : "Whole numbers only")</td>
+                <td><StatusBadge Status="@(unit.IsActive ? "Active" : "Inactive")" /></td>
+                <td class="actions">
+                    <div class="btn-row">
+                        <button type="button" class="op-btn op-btn--sm" disabled>Edit</button>
+                    </div>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+</DataPanel>

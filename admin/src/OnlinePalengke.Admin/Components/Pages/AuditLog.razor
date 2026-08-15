@@ -1,0 +1,79 @@
+@page "/audit-log"
+@using OnlinePalengke.Admin.ViewModels
+
+<PageTitle>Audit log · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Audit log"
+            Description="Every state-changing action taken by an admin, an operator, or the system itself — approvals, takedowns, config changes, run assignments. Filterable, never edited or deleted." />
+
+<div class="toolbar">
+    <FilterChips Label="Filter by actor"
+                 Chips="PlaceholderData.AuditActorFilters"
+                 Selected="@_filter"
+                 SelectedChanged="OnFilterChanged" />
+    <span class="op-badge op-badge--muted">@_filtered.Count of @PlaceholderData.AuditEntries.Count entries</span>
+</div>
+
+<DataPanel Title="Activity"
+           Caption="Audit trail entries with actor, action and affected entity"
+           IsEmpty="@(_filtered.Count == 0)"
+           EmptyTitle="@EmptyTitle"
+           EmptyDescription="Actions that change state — approvals, takedowns, config edits, run assignments — appear here as they happen.">
+    <Columns>
+        <th scope="col">When</th>
+        <th scope="col">Actor</th>
+        <th scope="col">Action</th>
+        <th scope="col">Entity</th>
+        <th scope="col">Summary</th>
+    </Columns>
+    <ChildContent>
+        @foreach (var entry in _filtered)
+        {
+            <tr>
+                <td><ManilaTimestamp ValueUtc="entry.OccurredAtUtc" Relative="true" /></td>
+                <td>
+                    <span class="cell-strong">@entry.Actor</span>
+                    <span class="cell-muted"> · @entry.ActorRole</span>
+                </td>
+                <td><code class="code-chip">@entry.Action</code></td>
+                <td>
+                    <span class="cell-strong">@entry.EntityType</span>
+                    <span class="cell-muted"> @entry.EntityReference</span>
+                </td>
+                <td>@entry.Summary</td>
+            </tr>
+        }
+    </ChildContent>
+</DataPanel>
+
+@code {
+    private string _filter = "all";
+    private IReadOnlyList<AuditEntryRow> _filtered = PlaceholderData.AuditEntries;
+
+    private string EmptyTitle => _filter switch
+    {
+        "administrator" => "No administrator activity yet",
+        "operations" => "No operations activity yet",
+        "system" => "No system activity yet",
+        _ => "Nothing in the audit trail yet",
+    };
+
+    private void OnFilterChanged(string filter)
+    {
+        _filter = filter;
+
+        _filtered = filter switch
+        {
+            "administrator" => PlaceholderData.AuditEntries
+                .Where(e => string.Equals(e.ActorRole, "Administrator", StringComparison.OrdinalIgnoreCase))
+                .ToList(),
+            "operations" => PlaceholderData.AuditEntries
+                .Where(e => string.Equals(e.ActorRole, "Operations", StringComparison.OrdinalIgnoreCase))
+                .ToList(),
+            "system" => PlaceholderData.AuditEntries
+                .Where(e => string.Equals(e.ActorRole, "System", StringComparison.OrdinalIgnoreCase))
+                .ToList(),
+            _ => PlaceholderData.AuditEntries,
+        };
+    }
+}

@@ -1,0 +1,26 @@
+@*
+    Renders a peso amount. Always use this (or PhpCurrency directly) instead of
+    ToString("C") — the solution runs with InvariantGlobalization, so "C" yields dollars.
+*@
+
+<span class="amount @(Value < 0m ? "amount--negative" : null)">@Text</span>
+
+@code {
+    /// <summary>The amount in PHP. Money is always decimal.</summary>
+    [Parameter, EditorRequired]
+    public decimal Value { get; set; }
+
+    /// <summary>Drops the decimals and abbreviates thousands, for headline figures.</summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    /// <summary>Appends the ISO code, e.g. "₱1,234.50 PHP".</summary>
+    [Parameter]
+    public bool ShowIsoCode { get; set; }
+
+    private string Text => Compact
+        ? PhpCurrency.FormatCompact(Value)
+        : ShowIsoCode
+            ? PhpCurrency.FormatWithCode(Value)
+            : PhpCurrency.Format(Value);
+}

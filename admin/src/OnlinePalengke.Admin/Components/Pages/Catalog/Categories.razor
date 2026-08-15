@@ -1,0 +1,51 @@
+@page "/catalog/categories"
+
+<PageTitle>Categories · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Categories"
+            Description="Categories group the item master and scope the bidding: a customer picks one winning stall per category, so the split here decides how an order can be divided.">
+    <Breadcrumb>
+        <a href="catalog/items">Catalog</a> Categories
+    </Breadcrumb>
+    <Actions>
+        <button type="button" class="op-btn op-btn--primary" disabled>New category</button>
+    </Actions>
+</PageHeader>
+
+<DataPanel Title="All categories"
+           Caption="Catalog categories with item counts"
+           IsEmpty="@(PlaceholderData.Categories.Count == 0)">
+    <Toolbar>
+        <span class="op-badge op-badge--muted">@PlaceholderData.Categories.Count total</span>
+    </Toolbar>
+    <Columns>
+        <th scope="col">Name</th>
+        <th scope="col">Slug</th>
+        <th scope="col" class="num">Items</th>
+        <th scope="col" class="num">Order</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="actions">Actions</th>
+    </Columns>
+    <EmptyContent>
+        <EmptyState Glyph="◇"
+                    Title="No categories configured yet"
+                    Description="Categories are seeded once per deployment. Add Vegetables, Fish and seafood, Meat, Fruit, Rice and grains, and Dry goods to get a market bidding." />
+    </EmptyContent>
+    <ChildContent>
+        @foreach (var category in PlaceholderData.Categories)
+        {
+            <tr>
+                <td class="cell-strong">@category.Name</td>
+                <td class="mono">@category.Slug</td>
+                <td class="num">@category.ItemCount</td>
+                <td class="num">@category.SortOrder</td>
+                <td><StatusBadge Status="@(category.IsActive ? "Active" : "Inactive")" /></td>
+                <td class="actions">
+                    <div class="btn-row">
+                        <button type="button" class="op-btn op-btn--sm" disabled>Edit</button>
+                    </div>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+</DataPanel>

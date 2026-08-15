@@ -1,0 +1,30 @@
+@*
+    A single headline figure. Grouped inside a .stat-grid on the dashboard.
+*@
+
+<div class="stat-tile stat-tile--@Tone">
+    <p class="stat-tile__label">@Label</p>
+    <p class="stat-tile__value">@Value</p>
+    @if (!string.IsNullOrWhiteSpace(Caption))
+    {
+        <p class="stat-tile__caption">@Caption</p>
+    }
+</div>
+
+@code {
+    /// <summary>What the figure counts, e.g. "Orders today".</summary>
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>The pre-formatted figure. Format money through <c>PhpCurrency</c> before passing it in.</summary>
+    [Parameter, EditorRequired]
+    public string Value { get; set; } = string.Empty;
+
+    /// <summary>Optional qualifier under the figure.</summary>
+    [Parameter]
+    public string? Caption { get; set; }
+
+    /// <summary>One of: primary, success, info, warning, danger, neutral.</summary>
+    [Parameter]
+    public string Tone { get; set; } = "neutral";
+}

@@ -1,0 +1,62 @@
+@*
+    Delivery service-area editor — SEAM ONLY.
+
+    This renders a placeholder sized exactly like the live map will be. No Leaflet code
+    runs here yet and no CDN is contacted. The parameters and the element reference below
+    are the full contract the real editor needs, so wiring it up is confined to this file
+    plus the commented tags in App.razor.
+
+    See wwwroot/lib/leaflet/README.md for the step-by-step.
+*@
+
+<div class="map-placeholder" @ref="_mapHost" id="@_hostId" role="img" aria-label="@AriaLabel">
+    <span class="map-placeholder__tag">Map placeholder</span>
+    <p class="map-placeholder__title">Delivery service area</p>
+    <p class="map-placeholder__hint">
+        A Leaflet map with the Leaflet.draw polygon toolbar mounts here.
+        Drop the library into <span class="map-placeholder__code">wwwroot/lib/leaflet/</span>,
+        uncomment the <span class="map-placeholder__code">LEAFLET SEAM</span> tags in
+        <span class="map-placeholder__code">App.razor</span>, then implement this component.
+    </p>
+    <p class="map-placeholder__hint">
+        @if (HasSavedArea)
+        {
+            <text>This market already has a saved polygon; it will load as the initial shape.</text>
+        }
+        else
+        {
+            <text>No polygon saved for this market yet — the editor will open with an empty canvas.</text>
+        }
+    </p>
+</div>
+
+@code {
+    private readonly string _hostId = $"service-area-map-{Guid.NewGuid():N}";
+
+    // Held now so the JS interop call site does not need any markup change later.
+    private ElementReference _mapHost;
+
+    /// <summary>The element the Leaflet map will mount into.</summary>
+    public ElementReference MapHost => _mapHost;
+
+    /// <summary>Market whose service area is being edited.</summary>
+    [Parameter, EditorRequired]
+    public int MarketId { get; set; }
+
+    /// <summary>Existing polygon as GeoJSON, or null when the market has no area yet.</summary>
+    [Parameter]
+    public string? InitialPolygonGeoJson { get; set; }
+
+    /// <summary>Raised with the edited polygon as GeoJSON once the editor is wired up.</summary>
+    [Parameter]
+    public EventCallback<string> OnPolygonChanged { get; set; }
+
+    /// <summary>Disables editing; the map will render read-only.</summary>
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    private bool HasSavedArea => !string.IsNullOrWhiteSpace(InitialPolygonGeoJson);
+
+    private string AriaLabel =>
+        $"Delivery service area map for market {MarketId}. Interactive map not yet enabled in this build.";
+}

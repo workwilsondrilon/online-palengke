@@ -1,0 +1,203 @@
+@page "/configuration"
+
+<PageTitle>Configuration · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Configuration"
+            Description="Platform-wide parameters. Changes take effect on the next quote window, never retroactively on orders already priced.">
+    <Actions>
+        <button type="button" class="op-btn" @onclick="Reset">Reset</button>
+        <button type="button" class="op-btn op-btn--primary" @onclick="ConfirmSave">Save changes</button>
+    </Actions>
+</PageHeader>
+
+@if (_lastAction is not null)
+{
+    <div class="notice notice--warning" role="status">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_lastAction</span>
+    </div>
+}
+
+<div class="notice notice--info">
+    <span class="notice__glyph" aria-hidden="true">ℹ</span>
+    <span>
+        <strong>Shell build.</strong> These inputs are bound to a local
+        <span class="mono">PlatformSettings</span> object and are not persisted. Saving prints a note
+        instead of calling anything.
+    </span>
+</div>
+
+<div class="col-2">
+    <section class="panel">
+        <div class="panel__head">
+            <div class="panel__headings">
+                <h2 class="panel__title">Delivery fee</h2>
+                <p class="panel__description">
+                    fee = base fare + (distance beyond base km × per km × road factor)
+                    + (weight beyond threshold × per kg over)
+                </p>
+            </div>
+        </div>
+        <div class="panel__body">
+            <div class="field-grid">
+                <div class="field">
+                    <label class="field__label" for="cfg-base-fare">Base fare</label>
+                    <div class="input-suffix">
+                        <input id="cfg-base-fare" class="field__control" type="number" step="0.01" min="0" @bind="_settings.BaseFare" />
+                        <span class="input-suffix__unit">@PhpCurrency.Symbol</span>
+                    </div>
+                    <span class="field__hint">Charged on every delivery before distance and weight.</span>
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="cfg-base-km">Base distance</label>
+                    <div class="input-suffix">
+                        <input id="cfg-base-km" class="field__control" type="number" step="0.1" min="0" @bind="_settings.BaseKm" />
+                        <span class="input-suffix__unit">km</span>
+                    </div>
+                    <span class="field__hint">Included in the base fare; per-km charging starts beyond this.</span>
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="cfg-per-km">Per kilometre</label>
+                    <div class="input-suffix">
+                        <input id="cfg-per-km" class="field__control" type="number" step="0.01" min="0" @bind="_settings.PerKm" />
+                        <span class="input-suffix__unit">@PhpCurrency.Symbol / km</span>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="cfg-road-factor">Road factor</label>
+                    <div class="input-suffix">
+                        <input id="cfg-road-factor" class="field__control" type="number" step="0.01" min="1" @bind="_settings.RoadFactor" />
+                        <span class="input-suffix__unit">×</span>
+                    </div>
+                    <span class="field__hint">Multiplier converting straight-line distance to road distance.</span>
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="cfg-weight-threshold">Weight threshold</label>
+                    <div class="input-suffix">
+                        <input id="cfg-weight-threshold" class="field__control" type="number" step="0.5" min="0" @bind="_settings.WeightThresholdKg" />
+                        <span class="input-suffix__unit">kg</span>
+                    </div>
+                    <span class="field__hint">Summed from each item's <span class="mono">weight_per_unit_kg</span>.</span>
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="cfg-per-kg">Per kg over threshold</label>
+                    <div class="input-suffix">
+                        <input id="cfg-per-kg" class="field__control" type="number" step="0.01" min="0" @bind="_settings.PerKgOverThreshold" />
+                        <span class="input-suffix__unit">@PhpCurrency.Symbol / kg</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="panel__foot">
+            Worked example — 6 km, 14 kg: @WorkedExample
+        </div>
+    </section>
+
+    <div class="stack">
+        <section class="panel">
+            <div class="panel__head">
+                <div class="panel__headings">
+                    <h2 class="panel__title">Commission</h2>
+                    <p class="panel__description">Retained by the platform and deducted on the payout batch.</p>
+                </div>
+            </div>
+            <div class="panel__body">
+                <div class="field-grid">
+                    <div class="field">
+                        <label class="field__label" for="cfg-partner-commission">Partner commission</label>
+                        <div class="input-suffix">
+                            <input id="cfg-partner-commission" class="field__control" type="number" step="0.1" min="0" max="100" @bind="_settings.PartnerCommissionPercent" />
+                            <span class="input-suffix__unit">%</span>
+                        </div>
+                        <span class="field__hint">Taken from the goods subtotal of a winning quote.</span>
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="cfg-rider-commission">Rider commission</label>
+                        <div class="input-suffix">
+                            <input id="cfg-rider-commission" class="field__control" type="number" step="0.1" min="0" max="100" @bind="_settings.RiderCommissionPercent" />
+                            <span class="input-suffix__unit">%</span>
+                        </div>
+                        <span class="field__hint">Taken from the delivery fee, not the goods.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel__head">
+                <div class="panel__headings">
+                    <h2 class="panel__title">Quoting</h2>
+                    <p class="panel__description">How long stalls get to bid, and how long a winning quote stays honourable.</p>
+                </div>
+            </div>
+            <div class="panel__body">
+                <div class="field-grid">
+                    <div class="field">
+                        <label class="field__label" for="cfg-quote-window">Quote window</label>
+                        <div class="input-suffix">
+                            <input id="cfg-quote-window" class="field__control" type="number" step="5" min="5" @bind="_settings.QuoteWindowMinutes" />
+                            <span class="input-suffix__unit">minutes</span>
+                        </div>
+                        <span class="field__hint">Bidding stays open this long after a shopping list is posted.</span>
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="cfg-quote-expiry">Quote expiry</label>
+                        <div class="input-suffix">
+                            <input id="cfg-quote-expiry" class="field__control" type="number" step="5" min="5" @bind="_settings.QuoteExpiryMinutes" />
+                            <span class="input-suffix__unit">minutes</span>
+                        </div>
+                        <span class="field__hint">A customer must pay within this window or the quote lapses.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<ConfirmDialog @ref="_confirmDialog" OnConfirm="HandleSaveConfirmed" />
+
+@code {
+    private const decimal ExampleDistanceKm = 6m;
+    private const decimal ExampleWeightKg = 14m;
+
+    private ConfirmDialog? _confirmDialog;
+    private PlatformSettings _settings = new();
+    private string? _lastAction;
+
+    /// <summary>Live preview of the fee formula using the values currently in the form.</summary>
+    private string WorkedExample
+    {
+        get
+        {
+            var distance = Math.Max(0m, ExampleDistanceKm - _settings.BaseKm) * _settings.PerKm * _settings.RoadFactor;
+            var weight = Math.Max(0m, ExampleWeightKg - _settings.WeightThresholdKg) * _settings.PerKgOverThreshold;
+
+            return PhpCurrency.Format(_settings.BaseFare + distance + weight);
+        }
+    }
+
+    private void Reset()
+    {
+        _settings = new PlatformSettings();
+        _lastAction = "Reverted to the built-in defaults. Nothing was persisted — there is nothing to persist to yet.";
+    }
+
+    private void ConfirmSave() =>
+        _confirmDialog?.Show(
+            title: "Save platform configuration?",
+            message: $"New fees apply to quote windows opened from now on. Orders already priced keep the figures they were quoted at. A 6 km / 14 kg delivery would become {WorkedExample}.",
+            confirmText: "Save changes");
+
+    private void HandleSaveConfirmed(string reason)
+    {
+        _ = reason;
+        _lastAction = "Not wired yet — saving configuration will call the Application layer once it exists.";
+    }
+}

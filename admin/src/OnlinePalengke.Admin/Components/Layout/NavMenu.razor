@@ -1,0 +1,84 @@
+@*
+    Grouped primary navigation. NavLink supplies the "active" class, so route
+    highlighting follows the URL rather than any local state.
+*@
+
+<nav class="sidenav" aria-label="Primary">
+    <a class="sidenav__brand" href="">
+        <span class="sidenav__mark" aria-hidden="true">OP</span>
+        <span class="sidenav__brand-text">
+            <span class="sidenav__brand-name">Online Palengke</span>
+            <span class="sidenav__brand-sub">Operations console</span>
+        </span>
+    </a>
+
+    <div class="sidenav__scroll">
+        @foreach (var group in Groups)
+        {
+            <div class="sidenav__group">
+                <h2 class="sidenav__group-title" id="@GroupHeadingId(group.Title)">@group.Title</h2>
+                <ul class="sidenav__list" aria-labelledby="@GroupHeadingId(group.Title)">
+                    @foreach (var link in group.Links)
+                    {
+                        <li>
+                            <NavLink class="sidenav__link"
+                                     href="@link.Href"
+                                     Match="@(link.ExactMatch ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                                <span class="sidenav__glyph" aria-hidden="true">@link.Glyph</span>
+                                <span class="sidenav__text">@link.Text</span>
+                            </NavLink>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    </div>
+
+    <div class="sidenav__foot">
+        <span class="sidenav__env">Shell build — not yet wired to the API</span>
+    </div>
+</nav>
+
+@code {
+    private sealed record NavItem(string Text, string Href, string Glyph, bool ExactMatch = false);
+
+    private sealed record NavGroup(string Title, IReadOnlyList<NavItem> Links);
+
+    private static readonly IReadOnlyList<NavGroup> Groups =
+    [
+        new("Overview",
+        [
+            new("Dashboard", "", "◉", ExactMatch: true),
+        ]),
+
+        new("Operations",
+        [
+            new("Orders", "orders", "▤"),
+            new("Delivery runs", "delivery-runs", "▸"),
+            new("Payouts", "payouts", "₱"),
+        ]),
+
+        new("Marketplace",
+        [
+            new("Markets", "markets", "⌂"),
+            new("Categories", "catalog/categories", "◇"),
+            new("Items", "catalog/items", "◈"),
+            new("Units", "catalog/units", "◌"),
+        ]),
+
+        new("Trust and safety",
+        [
+            new("Verification", "verification", "✓"),
+            new("Content", "content", "▦"),
+            new("Audit log", "audit-log", "☰"),
+        ]),
+
+        new("System",
+        [
+            new("Configuration", "configuration", "⚙"),
+        ]),
+    ];
+
+    private static string GroupHeadingId(string title) =>
+        "navgroup-" + title.ToLowerInvariant().Replace(' ', '-');
+}

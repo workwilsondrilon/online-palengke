@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/admin/" />
+  <Folder Name="/admin/src/">
+    <Project Path="admin/src/OnlinePalengke.Admin/OnlinePalengke.Admin.csproj" />
+    <Project Path="admin/src/OnlinePalengke.Api/OnlinePalengke.Api.csproj" />
+    <Project Path="admin/src/OnlinePalengke.Application/OnlinePalengke.Application.csproj" />
+    <Project Path="admin/src/OnlinePalengke.Domain/OnlinePalengke.Domain.csproj" />
+    <Project Path="admin/src/OnlinePalengke.Infrastructure/OnlinePalengke.Infrastructure.csproj" />
+    <Project Path="admin/src/OnlinePalengke.Migrations/OnlinePalengke.Migrations.csproj" />
+  </Folder>
+  <Folder Name="/admin/tests/">
+    <Project Path="admin/tests/OnlinePalengke.IntegrationTests/OnlinePalengke.IntegrationTests.csproj" />
+    <Project Path="admin/tests/OnlinePalengke.UnitTests/OnlinePalengke.UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,205 @@
+@page "/markets/{MarketId:int}"
+
+<PageTitle>@(_market?.Name ?? "Market") · Online Palengke Admin</PageTitle>
+
+@if (_market is { } market)
+{
+    <PageHeader Title="@market.Name"
+                Description="@($"{market.City}, {market.Province} · {market.VerifiedStalls} verified stalls")">
+        <Breadcrumb>
+            <a href="markets">Markets</a> @market.Name
+        </Breadcrumb>
+        <Actions>
+            <StatusBadge Status="@market.Status" />
+            <button type="button" class="op-btn" disabled>Edit market</button>
+        </Actions>
+    </PageHeader>
+
+    @if (_lastAction is not null)
+    {
+        <div class="notice notice--warning" role="status">
+            <span class="notice__glyph" aria-hidden="true">⚠</span>
+            <span>@_lastAction</span>
+        </div>
+    }
+
+    <div class="col-2 col-2--wide-first">
+        <div class="stack">
+            <section class="panel">
+                <div class="panel__head">
+                    <div class="panel__headings">
+                        <h2 class="panel__title">Delivery service area</h2>
+                        <p class="panel__description">
+                            The polygon a customer's address must fall inside to order from this market.
+                            Drawn and edited with Leaflet.draw.
+                        </p>
+                    </div>
+                    <div class="panel__toolbar">
+                        <button type="button" class="op-btn op-btn--sm" disabled>Draw polygon</button>
+                        <button type="button" class="op-btn op-btn--sm" disabled>Clear</button>
+                        <button type="button" class="op-btn op-btn--sm op-btn--primary" disabled>Save area</button>
+                    </div>
+                </div>
+                <div class="panel__body">
+                    <ServiceAreaMap MarketId="market.Id"
+                                    InitialPolygonGeoJson="@(market.HasServiceArea ? SamplePolygonGeoJson : null)" />
+                </div>
+                <div class="panel__foot">
+                    Leaflet is not bundled yet — see <span class="mono">wwwroot/lib/leaflet/README.md</span>
+                    and the <span class="mono">LEAFLET SEAM</span> markers in <span class="mono">App.razor</span>.
+                </div>
+            </section>
+
+            <DataPanel Title="Delivery windows"
+                       Description="Times are Asia/Manila wall-clock. The cutoff is how long before the window opens that ordering — and therefore quoting — closes."
+                       Caption="Delivery windows for this market"
+                       IsEmpty="@(_windows.Count == 0)">
+                <Toolbar>
+                    <button type="button" class="op-btn op-btn--sm op-btn--primary" disabled>Add window</button>
+                </Toolbar>
+                <Columns>
+                    <th scope="col">Label</th>
+                    <th scope="col">Opens</th>
+                    <th scope="col">Closes</th>
+                    <th scope="col" class="num">Cutoff</th>
+                    <th scope="col" class="num">Capacity</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="actions">Actions</th>
+                </Columns>
+                <EmptyContent>
+                    <EmptyState Glyph="◷"
+                                Title="No delivery windows for this market yet"
+                                Description="Customers cannot book until at least one window exists. A typical first window is 7–9 AM with a 90 minute cutoff." />
+                </EmptyContent>
+                <ChildContent>
+                    @foreach (var window in _windows)
+                    {
+                        <tr>
+                            <td class="cell-strong">@window.Label</td>
+                            <td>@ManilaTime.FormatTimeOfDay(window.StartsAt)</td>
+                            <td>@ManilaTime.FormatTimeOfDay(window.EndsAt)</td>
+                            <td class="num">@window.CutoffOffsetMinutes min before</td>
+                            <td class="num">@window.Capacity</td>
+                            <td><StatusBadge Status="@(window.IsActive ? "Active" : "Inactive")" /></td>
+                            <td class="actions">
+                                <div class="btn-row">
+                                    <button type="button" class="op-btn op-btn--sm" disabled>Edit</button>
+                                    <button type="button" class="op-btn op-btn--sm" @onclick="() => ConfirmRemove(window)">Remove</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </ChildContent>
+            </DataPanel>
+        </div>
+
+        <div class="stack">
+            <section class="panel">
+                <div class="panel__head">
+                    <div class="panel__headings">
+                        <h2 class="panel__title">At a glance</h2>
+                    </div>
+                </div>
+                <div class="panel__body">
+                    <dl class="detail-list">
+                        <dt>Market id</dt>
+                        <dd class="mono">@market.Id</dd>
+
+                        <dt>City</dt>
+                        <dd>@market.City</dd>
+
+                        <dt>Province</dt>
+                        <dd>@market.Province</dd>
+
+                        <dt>Verified stalls</dt>
+                        <dd>@market.VerifiedStalls</dd>
+
+                        <dt>Delivery windows</dt>
+                        <dd>@_windows.Count</dd>
+
+                        <dt>Service area</dt>
+                        <dd>
+                            <StatusBadge Status="@(market.HasServiceArea ? "Active" : "Pending")"
+                                         Label="@(market.HasServiceArea ? "Drawn" : "Not drawn")" />
+                        </dd>
+
+                        <dt>Status</dt>
+                        <dd><StatusBadge Status="@market.Status" /></dd>
+                    </dl>
+                </div>
+            </section>
+
+            <div class="notice notice--info">
+                <span class="notice__glyph" aria-hidden="true">ℹ</span>
+                <span>
+                    <strong>Shell build.</strong> Editing controls are disabled until this page is wired
+                    to the Application layer. The map host, the windows table and the confirmation dialog
+                    are the three seams that need real handlers.
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <ConfirmDialog @ref="_confirmDialog" OnConfirm="HandleRemoveConfirmed" />
+}
+else
+{
+    <PageHeader Title="Market not found">
+        <Breadcrumb>
+            <a href="markets">Markets</a> Not found
+        </Breadcrumb>
+    </PageHeader>
+
+    <div class="panel">
+        <div class="panel__body">
+            <EmptyState Glyph="⌂"
+                        Title="That market does not exist"
+                        Description="No market in this build carries that id. The link may be stale.">
+                <Actions>
+                    <a class="op-btn op-btn--primary" href="markets">Back to markets</a>
+                </Actions>
+            </EmptyState>
+        </div>
+    </div>
+}
+
+@code {
+    // A rough box over Balintawak, purely so the placeholder can say an area already exists.
+    private const string SamplePolygonGeoJson =
+        "{\"type\":\"Polygon\",\"coordinates\":[[[120.985,14.655],[121.015,14.655],[121.015,14.680],[120.985,14.680],[120.985,14.655]]]}";
+
+    private ConfirmDialog? _confirmDialog;
+    private MarketRow? _market;
+    private IReadOnlyList<DeliveryWindowRow> _windows = [];
+    private DeliveryWindowRow? _pendingRemoval;
+    private string? _lastAction;
+
+    /// <summary>Route parameter: the market being inspected.</summary>
+    [Parameter]
+    public int MarketId { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _market = PlaceholderData.FindMarket(MarketId);
+        _windows = _market is null ? [] : PlaceholderData.DeliveryWindowsFor(MarketId);
+        _lastAction = null;
+    }
+
+    private void ConfirmRemove(DeliveryWindowRow window)
+    {
+        _pendingRemoval = window;
+        _confirmDialog?.Show(
+            title: $"Remove the {window.Label} window?",
+            message: "Customers lose this booking slot immediately. Orders already placed inside it are unaffected.",
+            confirmText: "Remove window",
+            destructive: true,
+            requiresReason: true);
+    }
+
+    private void HandleRemoveConfirmed(string reason)
+    {
+        var label = _pendingRemoval?.Label ?? "window";
+        _pendingRemoval = null;
+        _lastAction = $"Not wired yet — removing the {label} window (reason: {reason.Trim()}) will call the Application layer once it exists.";
+    }
+}

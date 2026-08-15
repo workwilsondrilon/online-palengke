@@ -1,0 +1,28 @@
+/*
+    Template-supplied styles kept for Blazor's built-in UI (validation classes and the
+    error boundary). All Online Palengke styling lives in wwwroot/css/admin.css, which
+    is loaded after this file.
+*/
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #2c8144;
+}
+
+.invalid {
+    outline: 1px solid #a72b21;
+}
+
+.validation-message {
+    color: #a72b21;
+}
+
+.blazor-error-boundary {
+    background: #a72b21;
+    padding: 1rem;
+    color: white;
+    border-radius: 10px;
+}
+
+.blazor-error-boundary::after {
+    content: "An error has occurred."
+}

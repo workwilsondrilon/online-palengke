@@ -1,0 +1,54 @@
+@*
+    Single-select filter chips. Rendered as real buttons in a labelled group so they are
+    reachable by Tab and announce their pressed state.
+*@
+
+<div class="chips" role="group" aria-label="@Label">
+    @foreach (var chip in Chips)
+    {
+        var isSelected = string.Equals(chip.Key, Selected, StringComparison.OrdinalIgnoreCase);
+        <button type="button"
+                class="chip @(isSelected ? "chip--on" : null)"
+                aria-pressed="@(isSelected ? "true" : "false")"
+                @onclick="() => SelectAsync(chip.Key)">
+            <span class="chip__label">@chip.Label</span>
+            @if (chip.Count.HasValue)
+            {
+                <span class="chip__count">@chip.Count.Value</span>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>Accessible name for the chip group.</summary>
+    [Parameter]
+    public string Label { get; set; } = "Filter";
+
+    /// <summary>The chips to render.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<FilterChip> Chips { get; set; } = [];
+
+    /// <summary>Key of the currently selected chip.</summary>
+    [Parameter]
+    public string Selected { get; set; } = "all";
+
+    /// <summary>Raised with the newly selected key. Supports <c>@bind-Selected</c>.</summary>
+    [Parameter]
+    public EventCallback<string> SelectedChanged { get; set; }
+
+    private async Task SelectAsync(string key)
+    {
+        if (string.Equals(key, Selected, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        Selected = key;
+
+        if (SelectedChanged.HasDelegate)
+        {
+            await SelectedChanged.InvokeAsync(key);
+        }
+    }
+}

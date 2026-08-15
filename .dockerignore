@@ -1,0 +1,27 @@
+# Flutter apps are never part of a Docker image built from this repo -
+# excluding them keeps the build context small and their build artifacts
+# (which can run into hundreds of MB) out of the daemon entirely.
+customer/
+partner/
+rider/
+shared/
+
+# .NET build output - always rebuilt inside the image.
+**/bin/
+**/obj/
+
+# Editor / tooling state.
+.vs/
+.vscode/
+.idea/
+.claude/
+
+# VCS.
+.git/
+.gitignore
+
+# Local infra state and secrets - must never end up baked into an image.
+docker-data/
+.env
+.env.*
+!.env.example

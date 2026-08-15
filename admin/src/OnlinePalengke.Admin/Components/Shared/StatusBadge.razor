@@ -1,0 +1,48 @@
+@*
+    Maps a free-text status string to a colour tone. Keeping the mapping here means a new
+    status added by the Application layer degrades to the neutral tone rather than
+    throwing, and there is exactly one table to update.
+*@
+
+<span class="op-badge op-badge--@Tone">@(Label ?? Status)</span>
+
+@code {
+    /// <summary>The raw status text, as it will arrive from the Application layer.</summary>
+    [Parameter, EditorRequired]
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>Overrides the displayed text without changing the colour lookup.</summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>Explicit tone override. Leave null to derive the tone from <see cref="Status"/>.</summary>
+    [Parameter]
+    public string? ToneOverride { get; set; }
+
+    private string Tone => ToneOverride ?? ToneFor(Status);
+
+    /// <summary>Maps a status string to one of: success, info, warning, danger, muted, neutral.</summary>
+    public static string ToneFor(string? status)
+    {
+        var key = (status ?? string.Empty).Trim().ToLowerInvariant().Replace('_', ' ').Replace('-', ' ');
+
+        return key switch
+        {
+            "active" or "approved" or "verified" or "live" or "published" or "paid"
+                or "delivered" or "completed" or "settled" or "on shift" or "open" => "success",
+
+            "in review" or "shopping" or "out for delivery" or "en route" or "assembling"
+                or "collecting quotes" or "quoting" or "assigned" or "onboarding" or "processing" => "info",
+
+            "pending" or "awaiting payment" or "unpaid" or "reported" or "expiring soon"
+                or "expiring" or "draft" or "unassigned" or "needs attention" or "hold" => "warning",
+
+            "rejected" or "failed" or "cancelled" or "canceled" or "suspended" or "taken down"
+                or "expired" or "blocked" or "refunded" or "overdue" => "danger",
+
+            "inactive" or "archived" or "off shift" or "closed" or "none" => "muted",
+
+            _ => "neutral",
+        };
+    }
+}

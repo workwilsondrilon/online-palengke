@@ -1,0 +1,144 @@
+@page "/delivery-runs"
+
+<PageTitle>Delivery runs · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Delivery runs"
+            Description="Paid orders are batched into runs by market, window and date, then handed to one rider. Assemble the run first, assign the rider second.">
+    <Actions>
+        <button type="button" class="op-btn op-btn--primary" disabled>Assemble run</button>
+    </Actions>
+</PageHeader>
+
+<section class="panel">
+    <div class="panel__head">
+        <div class="panel__headings">
+            <h2 class="panel__title">Assemble a run</h2>
+            <p class="panel__description">Pick the market, window and date; every paid order in that slot is pulled into one run.</p>
+        </div>
+    </div>
+    <div class="panel__body">
+        <div class="field-grid">
+            <div class="field">
+                <label class="field__label" for="run-market">Market</label>
+                <select id="run-market" class="field__control" @bind="_market">
+                    @foreach (var market in PlaceholderData.Markets)
+                    {
+                        <option value="@market.Name">@market.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="run-window">Delivery window</label>
+                <select id="run-window" class="field__control" @bind="_window">
+                    @foreach (var window in WindowOptions)
+                    {
+                        <option value="@window">@window</option>
+                    }
+                </select>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="run-date">Date</label>
+                <input id="run-date" class="field__control" type="date" @bind="_date" />
+                <span class="field__hint">Asia/Manila calendar date.</span>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="run-rider">Rider</label>
+                <select id="run-rider" class="field__control" @bind="_rider">
+                    <option value="">Leave unassigned</option>
+                    @foreach (var rider in PlaceholderData.AvailableRiders)
+                    {
+                        <option value="@rider">@rider</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="op-btn" disabled>Preview stops</button>
+            <button type="button" class="op-btn op-btn--primary" @onclick="ConfirmAssemble">Assemble run</button>
+        </div>
+    </div>
+</section>
+
+@if (_lastAction is not null)
+{
+    <div class="notice notice--warning" role="status">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_lastAction</span>
+    </div>
+}
+
+<DataPanel Title="Runs"
+           Description="One row per market, window and date."
+           Caption="Assembled delivery runs"
+           IsEmpty="@(PlaceholderData.DeliveryRuns.Count == 0)">
+    <Columns>
+        <th scope="col">Run</th>
+        <th scope="col">Market and window</th>
+        <th scope="col">Date</th>
+        <th scope="col" class="num">Stops</th>
+        <th scope="col" class="num">Weight</th>
+        <th scope="col">Rider</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="actions">Actions</th>
+    </Columns>
+    <EmptyContent>
+        <EmptyState Glyph="▸"
+                    Title="No runs assembled yet"
+                    Description="Nothing has been batched for today. Choose a market, window and date above and assemble the first run — only paid orders are eligible." />
+    </EmptyContent>
+    <ChildContent>
+        @foreach (var run in PlaceholderData.DeliveryRuns)
+        {
+            <tr>
+                <td class="mono cell-strong">@run.Reference</td>
+                <td>
+                    @run.MarketName
+                    <span class="cell-sub">@run.WindowLabel</span>
+                </td>
+                <td>@ManilaTime.FormatDate(run.RunDate)</td>
+                <td class="num">@run.Stops</td>
+                <td class="num">@Weight(run.TotalWeightKg)</td>
+                <td>@(run.AssignedRider ?? "Unassigned")</td>
+                <td><StatusBadge Status="@run.Status" /></td>
+                <td class="actions">
+                    <div class="btn-row">
+                        <button type="button" class="op-btn op-btn--sm" disabled>Assign rider</button>
+                    </div>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+</DataPanel>
+
+<ConfirmDialog @ref="_confirmDialog" OnConfirm="HandleAssembleConfirmed" />
+
+@code {
+    private ConfirmDialog? _confirmDialog;
+    private string _market = "Balintawak Market";
+    private string _window = "7–9 AM";
+    private string _rider = string.Empty;
+    private DateTime _date = ManilaTime.Today.ToDateTime(TimeOnly.MinValue);
+    private string? _lastAction;
+
+    private static readonly string[] WindowOptions = ["7–9 AM", "9–11 AM", "1–3 PM", "4–6 PM"];
+
+    private static string Weight(decimal kg) =>
+        $"{kg.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} kg";
+
+    private void ConfirmAssemble() =>
+        _confirmDialog?.Show(
+            title: "Assemble this run?",
+            message: $"Every paid order for {_market}, {_window} on {ManilaTime.FormatDate(DateOnly.FromDateTime(_date))} is pulled into a single run"
+                     + (string.IsNullOrEmpty(_rider) ? " and left unassigned." : $" and assigned to {_rider}."),
+            confirmText: "Assemble run");
+
+    private void HandleAssembleConfirmed(string reason)
+    {
+        _ = reason;
+        _lastAction = $"Not wired yet — assembling {_market} {_window} for {ManilaTime.FormatDate(DateOnly.FromDateTime(_date))} will call the Application layer once it exists.";
+    }
+}

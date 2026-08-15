@@ -1,0 +1,145 @@
+@*
+    Table wrapper with three mutually exclusive body states: loading, empty, and rows.
+    Callers supply <Columns> for the header cells and <ChildContent> for <tr> rows.
+
+    Usage:
+        <DataPanel Title="Markets" IsEmpty="!markets.Any()">
+            <Columns><th scope="col">Name</th></Columns>
+            <EmptyContent><EmptyState Title="No markets configured yet" /></EmptyContent>
+            <ChildContent>@foreach (...) { <tr><td>...</td></tr> }</ChildContent>
+        </DataPanel>
+*@
+
+<section class="panel" aria-busy="@(IsLoading ? "true" : "false")">
+    @if (!string.IsNullOrWhiteSpace(Title) || Toolbar is not null)
+    {
+        <div class="panel__head">
+            <div class="panel__headings">
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    <h2 class="panel__title">@Title</h2>
+                }
+                @if (!string.IsNullOrWhiteSpace(Description))
+                {
+                    <p class="panel__description">@Description</p>
+                }
+            </div>
+            @if (Toolbar is not null)
+            {
+                <div class="panel__toolbar">
+                    @Toolbar
+                </div>
+            }
+        </div>
+    }
+
+    @if (IsLoading)
+    {
+        <div class="panel__body panel__body--loading">
+            <p class="visually-hidden">Loading @(Title ?? "data")…</p>
+            @for (var i = 0; i < SkeletonRows; i++)
+            {
+                <div class="skeleton-row" aria-hidden="true">
+                    <span class="skeleton" style="width: 28%"></span>
+                    <span class="skeleton" style="width: 18%"></span>
+                    <span class="skeleton" style="width: 22%"></span>
+                    <span class="skeleton" style="width: 12%"></span>
+                </div>
+            }
+        </div>
+    }
+    else if (IsEmpty)
+    {
+        <div class="panel__body panel__body--empty">
+            @if (EmptyContent is not null)
+            {
+                @EmptyContent
+            }
+            else
+            {
+                <EmptyState Title="@(EmptyTitle ?? "Nothing here yet")" Description="@EmptyDescription" />
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="data-table">
+                @if (!string.IsNullOrWhiteSpace(Caption))
+                {
+                    <caption class="visually-hidden">@Caption</caption>
+                }
+                @if (Columns is not null)
+                {
+                    <thead>
+                        <tr>@Columns</tr>
+                    </thead>
+                }
+                <tbody>
+                    @ChildContent
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (Footer is not null)
+    {
+        <div class="panel__foot">
+            @Footer
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>Panel heading, rendered as an &lt;h2&gt;.</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>Optional supporting line under the panel title.</summary>
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>Screen-reader caption describing the table contents.</summary>
+    [Parameter]
+    public string? Caption { get; set; }
+
+    /// <summary>&lt;th&gt; cells for the table header row.</summary>
+    [Parameter]
+    public RenderFragment? Columns { get; set; }
+
+    /// <summary>&lt;tr&gt; rows for the table body.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Controls and filters rendered on the trailing edge of the panel head.</summary>
+    [Parameter]
+    public RenderFragment? Toolbar { get; set; }
+
+    /// <summary>Content rendered below the table, e.g. paging or totals.</summary>
+    [Parameter]
+    public RenderFragment? Footer { get; set; }
+
+    /// <summary>Replaces the default empty state entirely.</summary>
+    [Parameter]
+    public RenderFragment? EmptyContent { get; set; }
+
+    /// <summary>Title for the default empty state, when <see cref="EmptyContent"/> is not supplied.</summary>
+    [Parameter]
+    public string? EmptyTitle { get; set; }
+
+    /// <summary>Description for the default empty state.</summary>
+    [Parameter]
+    public string? EmptyDescription { get; set; }
+
+    /// <summary>Renders skeleton placeholder rows and sets <c>aria-busy</c>.</summary>
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    /// <summary>Renders the empty state instead of the table.</summary>
+    [Parameter]
+    public bool IsEmpty { get; set; }
+
+    /// <summary>How many skeleton rows to draw while loading.</summary>
+    [Parameter]
+    public int SkeletonRows { get; set; } = 4;
+}

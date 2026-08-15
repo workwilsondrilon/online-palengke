@@ -1,0 +1,45 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+
+    @* Bootstrap is the copy vendored into wwwroot by the template. No CDN: this app must work offline. *@
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["css/admin.css"]" />
+    <link rel="stylesheet" href="@Assets["OnlinePalengke.Admin.styles.css"]" />
+
+    @*
+        LEAFLET SEAM — see wwwroot/lib/leaflet/README.md.
+        Drop leaflet.css / leaflet.js / leaflet.draw.css / leaflet.draw.js into
+        wwwroot/lib/leaflet/ and uncomment the four lines below. Nothing else in the app
+        needs to change; the map host lives in Components/Markets/ServiceAreaMap.razor.
+        Deliberately NOT wired yet, and deliberately NOT a CDN reference.
+
+        <link rel="stylesheet" href="@Assets["lib/leaflet/leaflet.css"]" />
+        <link rel="stylesheet" href="@Assets["lib/leaflet/leaflet.draw.css"]" />
+    *@
+
+    <ImportMap />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+
+    @*
+        LEAFLET SEAM (scripts) — uncomment alongside the stylesheets above.
+
+        <script src="@Assets["lib/leaflet/leaflet.js"]"></script>
+        <script src="@Assets["lib/leaflet/leaflet.draw.js"]"></script>
+    *@
+</body>
+
+</html>

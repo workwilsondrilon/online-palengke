@@ -1,0 +1,108 @@
+@page "/catalog/items"
+@using System.Globalization
+
+<PageTitle>Items · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Item master"
+            Description="The shared vocabulary customers shop from. Each item carries a category, a default unit, a photo and a per-unit weight used by the delivery fee calculation.">
+    <Breadcrumb>
+        <a href="catalog/categories">Catalog</a> Items
+    </Breadcrumb>
+    <Actions>
+        <button type="button" class="op-btn op-btn--primary" disabled>New item</button>
+    </Actions>
+</PageHeader>
+
+<div class="notice notice--warning">
+    <span class="notice__glyph" aria-hidden="true">⚠</span>
+    <span>
+        <strong>Items never carry a price.</strong> Prices exist only on partner quotes, because every
+        stall bids its own figure per shopping list. There is no price column on this screen and none
+        should be added.
+    </span>
+</div>
+
+<DataPanel Title="All items"
+           Caption="Item master, without prices"
+           IsEmpty="@(_filtered.Count == 0)">
+    <Toolbar>
+        <div class="search">
+            <span class="search__glyph" aria-hidden="true">⌕</span>
+            <label class="visually-hidden" for="item-search">Search items</label>
+            <input id="item-search"
+                   class="field__control"
+                   type="search"
+                   placeholder="Search by item or category"
+                   value="@_query"
+                   @oninput="OnQueryChanged" />
+        </div>
+        <span class="op-badge op-badge--muted">@_filtered.Count of @PlaceholderData.Items.Count</span>
+    </Toolbar>
+    <Columns>
+        <th scope="col">Photo</th>
+        <th scope="col">Item</th>
+        <th scope="col">Category</th>
+        <th scope="col">Default unit</th>
+        <th scope="col" class="num">Weight per unit</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="actions">Actions</th>
+    </Columns>
+    <EmptyContent>
+        <EmptyState Glyph="◈" Title="@EmptyTitle" Description="@EmptyDescription" />
+    </EmptyContent>
+    <ChildContent>
+        @foreach (var item in _filtered)
+        {
+            <tr>
+                <td>
+                    @if (string.IsNullOrWhiteSpace(item.ImageUrl))
+                    {
+                        <span class="op-badge op-badge--muted">No photo</span>
+                    }
+                    else
+                    {
+                        <span class="op-badge op-badge--success">Photo set</span>
+                    }
+                </td>
+                <td class="cell-strong">@item.Name</td>
+                <td>@item.CategoryName</td>
+                <td class="mono">@item.DefaultUnitCode</td>
+                <td class="num">@(item.WeightPerUnitKg.ToString("0.000", CultureInfo.InvariantCulture)) kg</td>
+                <td><StatusBadge Status="@(item.IsActive ? "Active" : "Inactive")" /></td>
+                <td class="actions">
+                    <div class="btn-row">
+                        <button type="button" class="op-btn op-btn--sm" disabled>Edit</button>
+                    </div>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+    <Footer>
+        <span class="mono">weight_per_unit_kg</span> feeds the weight surcharge in Configuration → Delivery fee.
+    </Footer>
+</DataPanel>
+
+@code {
+    private string _query = string.Empty;
+
+    private string EmptyTitle => string.IsNullOrWhiteSpace(_query)
+        ? "No items in the master yet"
+        : "No items match that search";
+
+    private string EmptyDescription => string.IsNullOrWhiteSpace(_query)
+        ? "Add the produce, meat and seafood customers will pick from. Items are shared across every market."
+        : "Try a shorter search term, or clear the box to see the full item master.";
+    private IReadOnlyList<ItemRow> _filtered = PlaceholderData.Items;
+
+    private void OnQueryChanged(ChangeEventArgs args)
+    {
+        _query = args.Value?.ToString() ?? string.Empty;
+
+        _filtered = string.IsNullOrWhiteSpace(_query)
+            ? PlaceholderData.Items
+            : PlaceholderData.Items
+                .Where(i => i.Name.Contains(_query, StringComparison.OrdinalIgnoreCase)
+                         || i.CategoryName.Contains(_query, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+    }
+}

@@ -1,0 +1,165 @@
+@page "/orders/{Reference}"
+
+<PageTitle>@Reference · Online Palengke Admin</PageTitle>
+
+@if (_order is { } order)
+{
+    <PageHeader Title="@order.Reference"
+                Description="@($"{order.CustomerName} · {order.MarketName} · {order.WindowLabel}")">
+        <Breadcrumb>
+            <a href="orders">Orders</a> @order.Reference
+        </Breadcrumb>
+        <Actions>
+            <StatusBadge Status="@order.Status" />
+            <button type="button" class="op-btn" disabled>Refund</button>
+            <button type="button" class="op-btn" disabled>Cancel order</button>
+        </Actions>
+    </PageHeader>
+
+    <div class="col-2 col-2--wide-first">
+        <div class="stack">
+            <DataPanel Title="Purchased lines"
+                       Description="Every line is priced from the winning stall's quote for that category. There is no catalogue price to fall back on."
+                       Caption="Order lines with the winning stall and quoted price"
+                       IsEmpty="@(_lines.Count == 0)">
+                <Columns>
+                    <th scope="col">Item</th>
+                    <th scope="col">Category</th>
+                    <th scope="col" class="num">Quantity</th>
+                    <th scope="col">Winning stall</th>
+                    <th scope="col" class="num">Quoted unit price</th>
+                    <th scope="col" class="num">Line total</th>
+                </Columns>
+                <EmptyContent>
+                    <EmptyState Glyph="▤"
+                                Title="No lines priced yet"
+                                Description="Lines are priced once the quote window closes and the customer picks a winning stall per category." />
+                </EmptyContent>
+                <ChildContent>
+                    @foreach (var line in _lines)
+                    {
+                        <tr>
+                            <td class="cell-strong">@line.ItemName</td>
+                            <td>@line.CategoryName</td>
+                            <td class="num">@Quantity(line)</td>
+                            <td>@line.WinningStall</td>
+                            <td class="num"><PhpAmount Value="line.QuotedUnitPrice" /></td>
+                            <td class="num"><PhpAmount Value="line.LineTotal" /></td>
+                        </tr>
+                    }
+                </ChildContent>
+                <Footer>
+                    Goods subtotal <PhpAmount Value="_goodsSubtotal" /> · delivery fee and commission are settled separately on the payout batch.
+                </Footer>
+            </DataPanel>
+
+            <DataPanel Title="Timeline"
+                       Caption="Order lifecycle events"
+                       IsEmpty="true">
+                <EmptyContent>
+                    <EmptyState Glyph="◷"
+                                Compact="true"
+                                Title="Timeline not wired yet"
+                                Description="Quote window opened and closed, payment captured, shopping started, run assigned, delivered — each becomes a row here once the Application layer exposes order events." />
+                </EmptyContent>
+            </DataPanel>
+        </div>
+
+        <div class="stack">
+            <section class="panel">
+                <div class="panel__head">
+                    <div class="panel__headings">
+                        <h2 class="panel__title">Order summary</h2>
+                    </div>
+                </div>
+                <div class="panel__body">
+                    <dl class="detail-list">
+                        <dt>Reference</dt>
+                        <dd class="mono">@order.Reference</dd>
+
+                        <dt>Customer</dt>
+                        <dd>@order.CustomerName</dd>
+
+                        <dt>Market</dt>
+                        <dd>@order.MarketName</dd>
+
+                        <dt>Delivery window</dt>
+                        <dd>@order.WindowLabel</dd>
+
+                        <dt>Delivery date</dt>
+                        <dd>@ManilaTime.FormatDate(order.DeliveryDate)</dd>
+
+                        <dt>Placed</dt>
+                        <dd><ManilaTimestamp ValueUtc="order.PlacedAtUtc" ShowZone="true" /></dd>
+
+                        <dt>Lines</dt>
+                        <dd>@order.LineCount</dd>
+
+                        <dt>Order total</dt>
+                        <dd>
+                            @if (order.Total == 0m)
+                            {
+                                <span class="cell-sub">Not priced yet</span>
+                            }
+                            else
+                            {
+                                <PhpAmount Value="order.Total" ShowIsoCode="true" />
+                            }
+                        </dd>
+
+                        <dt>Status</dt>
+                        <dd><StatusBadge Status="@order.Status" /></dd>
+                    </dl>
+                </div>
+            </section>
+
+            <div class="notice notice--info">
+                <span class="notice__glyph" aria-hidden="true">ℹ</span>
+                <span>
+                    <strong>Shell build.</strong> The line rows are the same static sample for every
+                    order; only the summary panel reflects the reference in the URL.
+                </span>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <PageHeader Title="Order not found">
+        <Breadcrumb>
+            <a href="orders">Orders</a> Not found
+        </Breadcrumb>
+    </PageHeader>
+
+    <div class="panel">
+        <div class="panel__body">
+            <EmptyState Glyph="▤"
+                        Title="No order with that reference"
+                        Description="@($"Nothing in this build matches {Reference}. References look like OP-24081-0417.")">
+                <Actions>
+                    <a class="op-btn op-btn--primary" href="orders">Back to orders</a>
+                </Actions>
+            </EmptyState>
+        </div>
+    </div>
+}
+
+@code {
+    private OrderRow? _order;
+    private IReadOnlyList<OrderLineRow> _lines = [];
+    private decimal _goodsSubtotal;
+
+    /// <summary>Route parameter: the human-readable order reference.</summary>
+    [Parameter]
+    public string Reference { get; set; } = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        _order = PlaceholderData.FindOrder(Reference);
+        _lines = _order is null || _order.Total == 0m ? [] : PlaceholderData.OrderLines;
+        _goodsSubtotal = _lines.Sum(l => l.LineTotal);
+    }
+
+    private static string Quantity(OrderLineRow line) =>
+        $"{line.Quantity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {line.UnitCode}";
+}

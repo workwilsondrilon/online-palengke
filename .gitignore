@@ -1,0 +1,45 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+TestResults/
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+**/ios/Pods/
+**/ios/.symlinks/
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
+**/windows/flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/linux/flutter/ephemeral/
+
+# Secrets — AWS keys, PayMongo keys, SMS credentials and JWT signing keys
+# never enter the repo. Use dotnet user-secrets locally and the host's secret
+# store in deployed environments.
+appsettings.Local.json
+appsettings.*.Local.json
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# Local infrastructure
+docker-data/

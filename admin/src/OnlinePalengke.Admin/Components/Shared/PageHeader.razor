@@ -1,0 +1,46 @@
+@*
+    Page title, supporting description and an optional action slot.
+    Every routable page starts with one of these so headings stay consistent
+    and there is exactly one <h1> per page for screen readers.
+*@
+
+<header class="page-header">
+    <div class="page-header__text">
+        @if (Breadcrumb is not null)
+        {
+            <nav class="page-header__breadcrumb" aria-label="Breadcrumb">
+                @Breadcrumb
+            </nav>
+        }
+        <h1 class="page-header__title">@Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <p class="page-header__description">@Description</p>
+        }
+    </div>
+
+    @if (Actions is not null)
+    {
+        <div class="page-header__actions">
+            @Actions
+        </div>
+    }
+</header>
+
+@code {
+    /// <summary>The page heading. Rendered as the single &lt;h1&gt; of the page.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>One or two sentences explaining what the operator does on this screen.</summary>
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>Optional breadcrumb links rendered above the title.</summary>
+    [Parameter]
+    public RenderFragment? Breadcrumb { get; set; }
+
+    /// <summary>Optional buttons rendered on the trailing edge of the header.</summary>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+}

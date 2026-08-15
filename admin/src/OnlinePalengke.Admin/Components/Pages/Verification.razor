@@ -1,0 +1,143 @@
+@page "/verification"
+
+<PageTitle>Verification · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Verification and KYC"
+            Description="Review queue for partner and rider documents. Nothing trades or delivers on this platform until the paperwork behind it has been approved here.">
+    <Actions>
+        <button type="button" class="op-btn" disabled>Export queue</button>
+    </Actions>
+</PageHeader>
+
+@if (_lastAction is not null)
+{
+    <div class="notice notice--warning" role="status">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_lastAction</span>
+    </div>
+}
+
+<DataPanel Title="Review queue"
+           Description="Approving records the reviewer and the expiry date. Rejecting requires a reason, which is sent to the submitter and written to the audit log."
+           Caption="Partner and rider documents awaiting review"
+           IsEmpty="@(_filtered.Count == 0)">
+    <Toolbar>
+        <FilterChips Label="Filter by status"
+                     Chips="PlaceholderData.VerificationFilters"
+                     Selected="@_status"
+                     SelectedChanged="OnStatusChanged" />
+    </Toolbar>
+    <Columns>
+        <th scope="col">Subject</th>
+        <th scope="col">Type</th>
+        <th scope="col">Document</th>
+        <th scope="col">Submitted</th>
+        <th scope="col">Expires</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="actions">Decision</th>
+    </Columns>
+    <EmptyContent>
+        <EmptyState Glyph="✓"
+                    Title="@EmptyTitle"
+                    Description="Documents land here the moment a partner or rider submits them during onboarding, and again whenever one is close to expiring." />
+    </EmptyContent>
+    <ChildContent>
+        @foreach (var row in _filtered)
+        {
+            <tr>
+                <td>
+                    <span class="cell-strong">@row.SubjectName</span>
+                    <span class="cell-sub">@row.MarketName</span>
+                </td>
+                <td><StatusBadge Status="@row.SubjectType" ToneOverride="@(row.SubjectType == "Rider" ? "info" : "neutral")" /></td>
+                <td>@row.DocumentType</td>
+                <td>
+                    <ManilaTimestamp ValueUtc="row.SubmittedAtUtc" Relative="true" />
+                    <span class="cell-sub"><ManilaTimestamp ValueUtc="row.SubmittedAtUtc" /></span>
+                </td>
+                <td>
+                    @if (row.ExpiresOn is { } expires)
+                    {
+                        <span>@ManilaTime.FormatDate(expires)</span>
+                    }
+                    else
+                    {
+                        <span class="cell-sub">Not captured</span>
+                    }
+                </td>
+                <td><StatusBadge Status="@row.Status" /></td>
+                <td class="actions">
+                    <div class="btn-row">
+                        <button type="button" class="op-btn op-btn--sm op-btn--primary" @onclick="() => ConfirmApprove(row)">Approve</button>
+                        <button type="button" class="op-btn op-btn--sm" @onclick="() => ConfirmReject(row)">Reject</button>
+                    </div>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+    <Footer>
+        Showing @_filtered.Count of @PlaceholderData.VerificationQueue.Count documents.
+    </Footer>
+</DataPanel>
+
+<ConfirmDialog @ref="_confirmDialog" OnConfirm="HandleDecision" />
+
+@code {
+    private ConfirmDialog? _confirmDialog;
+    private string _status = "all";
+    private IReadOnlyList<VerificationRow> _filtered = PlaceholderData.VerificationQueue;
+    private VerificationRow? _pending;
+    private bool _pendingIsApproval;
+    private string? _lastAction;
+
+    private string EmptyTitle => _status == "all"
+        ? "Nothing waiting for review"
+        : "No documents in that state";
+
+    private void OnStatusChanged(string status)
+    {
+        _status = status;
+
+        _filtered = status == "all"
+            ? PlaceholderData.VerificationQueue
+            : PlaceholderData.VerificationQueue
+                .Where(r => Slug(r.Status) == status)
+                .ToList();
+    }
+
+    private static string Slug(string status) =>
+        status.Trim().ToLowerInvariant().Replace(' ', '-');
+
+    private void ConfirmApprove(VerificationRow row)
+    {
+        _pending = row;
+        _pendingIsApproval = true;
+        _confirmDialog?.Show(
+            title: $"Approve {row.DocumentType}?",
+            message: $"{row.SubjectName} becomes eligible to trade on {row.MarketName}. The expiry date on file is carried over and re-checked automatically.",
+            confirmText: "Approve document");
+    }
+
+    private void ConfirmReject(VerificationRow row)
+    {
+        _pending = row;
+        _pendingIsApproval = false;
+        _confirmDialog?.Show(
+            title: $"Reject {row.DocumentType}?",
+            message: $"{row.SubjectName} is notified and asked to resubmit. The reason is stored on the audit log.",
+            confirmText: "Reject document",
+            destructive: true,
+            requiresReason: true);
+    }
+
+    private void HandleDecision(string reason)
+    {
+        var subject = _pending?.SubjectName ?? "the subject";
+        var document = _pending?.DocumentType ?? "document";
+        _pending = null;
+
+        _lastAction = _pendingIsApproval
+            ? $"Not wired yet — approving {document} for {subject} will call the Application layer once it exists."
+            : $"Not wired yet — rejecting {document} for {subject} (reason: {reason.Trim()}) will call the Application layer once it exists.";
+    }
+}

@@ -1,0 +1,145 @@
+@page "/content"
+
+<PageTitle>Content · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Partner content"
+            Description="Everything partners have posted to promote their stalls. Posts go live the moment a partner publishes them — there is no approval gate — so this screen is for monitoring after the fact and taking things down when they break the rules.">
+    <Actions>
+        <button type="button" class="op-btn" disabled>Content policy</button>
+    </Actions>
+</PageHeader>
+
+<div class="notice notice--warning">
+    <span class="notice__glyph" aria-hidden="true">⚠</span>
+    <span>
+        <strong>This is not an approval queue.</strong> Every post below is already visible to
+        customers. Reviewing is reactive: watch what gets reported, and take down what should not
+        be live.
+    </span>
+</div>
+
+@if (_lastAction is not null)
+{
+    <div class="notice notice--warning" role="status">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_lastAction</span>
+    </div>
+}
+
+<div class="toolbar">
+    <FilterChips Label="Filter content"
+                 Chips="PlaceholderData.ContentFilters"
+                 Selected="@_filter"
+                 SelectedChanged="OnFilterChanged" />
+    <span class="op-badge op-badge--muted">@_filtered.Count of @PlaceholderData.ContentFeed.Count posts</span>
+</div>
+
+@if (_filtered.Count == 0)
+{
+    <div class="panel">
+        <div class="panel__body">
+            <EmptyState Glyph="▦"
+                        Title="@EmptyTitle"
+                        Description="Partner posts show up here as soon as they publish. Reported posts are pushed to the top of the default view." />
+        </div>
+    </div>
+}
+else
+{
+    <div class="feed">
+        @foreach (var post in _filtered)
+        {
+            <article class="feed-card">
+                <div class="feed-card__photo" role="img" aria-label="@($"Product photo for {post.Headline}")">
+                    Product photo
+                </div>
+                <div class="feed-card__body">
+                    <div class="feed-card__meta">
+                        <span class="cell-strong">@post.PartnerName</span>
+                        <span>·</span>
+                        <span>@post.MarketName</span>
+                        <span>·</span>
+                        <ManilaTimestamp ValueUtc="post.PublishedAtUtc" Relative="true" />
+                        <StatusBadge Status="@post.Status" />
+                    </div>
+                    <h2 class="feed-card__headline">@post.Headline</h2>
+                    <p class="feed-card__copy">@post.Copy</p>
+                </div>
+                <div class="feed-card__foot">
+                    <span class="feed-card__reports">
+                        @if (post.Reports == 0)
+                        {
+                            <text>No reports</text>
+                        }
+                        else if (post.Reports == 1)
+                        {
+                            <text>1 report</text>
+                        }
+                        else
+                        {
+                            <text>@post.Reports reports</text>
+                        }
+                    </span>
+                    <div class="btn-row">
+                        <button type="button" class="op-btn op-btn--sm" disabled>View reports</button>
+                        <button type="button"
+                                class="op-btn op-btn--sm"
+                                disabled="@(post.Status == "Taken down")"
+                                @onclick="() => ConfirmTakedown(post)">
+                            Take down
+                        </button>
+                    </div>
+                </div>
+            </article>
+        }
+    </div>
+}
+
+<ConfirmDialog @ref="_confirmDialog" OnConfirm="HandleTakedown" />
+
+@code {
+    private ConfirmDialog? _confirmDialog;
+    private string _filter = "all";
+    private IReadOnlyList<ContentPostRow> _filtered = PlaceholderData.ContentFeed;
+    private ContentPostRow? _pending;
+    private string? _lastAction;
+
+    private string EmptyTitle => _filter switch
+    {
+        "reported" => "Nothing has been reported",
+        "taken-down" => "Nothing has been taken down",
+        "live" => "No posts are live right now",
+        _ => "No partner content published yet",
+    };
+
+    private void OnFilterChanged(string filter)
+    {
+        _filter = filter;
+
+        _filtered = filter switch
+        {
+            "reported" => PlaceholderData.ContentFeed.Where(p => p.Reports > 0).ToList(),
+            "taken-down" => PlaceholderData.ContentFeed.Where(p => p.Status == "Taken down").ToList(),
+            "live" => PlaceholderData.ContentFeed.Where(p => p.Status == "Live").ToList(),
+            _ => PlaceholderData.ContentFeed,
+        };
+    }
+
+    private void ConfirmTakedown(ContentPostRow post)
+    {
+        _pending = post;
+        _confirmDialog?.Show(
+            title: "Take this post down?",
+            message: $"“{post.Headline}” stops being visible to customers immediately. {post.PartnerName} is notified with the reason you give.",
+            confirmText: "Take down",
+            destructive: true,
+            requiresReason: true);
+    }
+
+    private void HandleTakedown(string reason)
+    {
+        var headline = _pending?.Headline ?? "the post";
+        _pending = null;
+        _lastAction = $"Not wired yet — taking down “{headline}” (reason: {reason.Trim()}) will call the Application layer once it exists.";
+    }
+}

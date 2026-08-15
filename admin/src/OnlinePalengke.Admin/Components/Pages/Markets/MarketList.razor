@@ -1,0 +1,58 @@
+@page "/markets"
+
+<PageTitle>Markets · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Markets"
+            Description="Every wet market in the network. A market owns its verified stalls, its delivery service area and the delivery windows customers can book.">
+    <Actions>
+        <button type="button" class="op-btn op-btn--primary" disabled>Add market</button>
+    </Actions>
+</PageHeader>
+
+<DataPanel Title="All markets"
+           Caption="Markets with stall counts and service-area status"
+           IsEmpty="@(PlaceholderData.Markets.Count == 0)">
+    <Toolbar>
+        <span class="op-badge op-badge--muted">@PlaceholderData.Markets.Count total</span>
+    </Toolbar>
+    <Columns>
+        <th scope="col">Market</th>
+        <th scope="col">Location</th>
+        <th scope="col" class="num">Verified stalls</th>
+        <th scope="col" class="num">Windows</th>
+        <th scope="col">Service area</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="actions">Actions</th>
+    </Columns>
+    <EmptyContent>
+        <EmptyState Glyph="⌂"
+                    Title="No markets configured yet"
+                    Description="A market is the unit everything else hangs off: stalls bid inside it, riders are rostered to it, and delivery windows belong to it. Add the first one to begin onboarding partners." />
+    </EmptyContent>
+    <ChildContent>
+        @foreach (var market in PlaceholderData.Markets)
+        {
+            <tr>
+                <td>
+                    <a class="cell-strong" href="@($"markets/{market.Id}")">@market.Name</a>
+                </td>
+                <td>
+                    @market.City
+                    <span class="cell-sub">@market.Province</span>
+                </td>
+                <td class="num">@market.VerifiedStalls</td>
+                <td class="num">@market.DeliveryWindows</td>
+                <td>
+                    <StatusBadge Status="@(market.HasServiceArea ? "Active" : "Pending")"
+                                 Label="@(market.HasServiceArea ? "Drawn" : "Not drawn")" />
+                </td>
+                <td><StatusBadge Status="@market.Status" /></td>
+                <td class="actions">
+                    <div class="btn-row">
+                        <a class="op-btn op-btn--sm" href="@($"markets/{market.Id}")">Open</a>
+                    </div>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+</DataPanel>

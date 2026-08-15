@@ -1,0 +1,6 @@
+@OnlinePalengke.Api_HostAddress = http://localhost:5250
+
+GET {{OnlinePalengke.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,211 @@
+# =============================================================================
+# Online Palengke - local development infrastructure
+#
+#   docker compose up -d --build   bring everything up (rebuilds api/admin-web
+#                                   images when their source has changed)
+#   docker compose ps              check status/health
+#   docker compose logs -f api     tail one service's logs
+#   docker compose down            stop (database data survives)
+#   docker compose down -v         stop and wipe the database volume
+#
+# SERVICES
+#   mysql       MySQL 8.4, the application database.
+#   adminer     Web-based schema browser for mysql.
+#   traefik     Reverse proxy. Routes Host-based domains to the two app
+#               containers below - see ROUTING.
+#   api         OnlinePalengke.Api, built from admin/src/OnlinePalengke.Api/Dockerfile.
+#   admin-web   OnlinePalengke.Admin (Blazor Server), built from
+#               admin/src/OnlinePalengke.Admin/Dockerfile.
+#
+# ROUTING
+#   Traefik's docker provider watches this compose project and reads the
+#   `traefik.*` labels below to build its routes. Every route matches on the
+#   HTTP Host header, so it only works for a hostname that actually resolves
+#   to this machine - which, without any local DNS/hosts setup, none of the
+#   *.palengke.test names do. Until you wire that up yourself, use the plain
+#   published ports instead; both paths reach the same containers:
+#
+#     http://localhost:5080        -> api        (same as http://api.palengke.test)
+#     http://localhost:5090        -> admin-web   (same as http://admin.palengke.test)
+#     http://localhost:8080        -> adminer     (same as http://adminer.palengke.test)
+#     http://localhost:<TRAEFIK_HOST_PORT, default 80> -> traefik dashboard
+#                                      (same as http://traefik.palengke.test)
+#
+# WHAT IS DELIBERATELY NOT HERE
+#   Object storage. Online Palengke uses real AWS S3 in every environment,
+#   including local development. There is no MinIO or other S3 emulator here
+#   and none should be added - that was an explicit product decision, so that
+#   presigned URLs, bucket policies and lifecycle rules behave identically
+#   everywhere. The api container starts fine without real bucket names, but
+#   upload requests will fail until STORAGE_PUBLIC_BUCKET / STORAGE_PRIVATE_BUCKET
+#   below point at real buckets and AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+#   are set (in a local .env file - see .env.example).
+#
+# CREDENTIALS
+#   The defaults below exist so that `docker compose up -d` works on a fresh
+#   clone with no setup. They are throwaway local values and MUST NEVER be
+#   reused in any deployed environment, nor may this file be used as the basis
+#   for one. Deployed services get their credentials from the host's secret
+#   store. Override locally by exporting the variables or writing a .env file
+#   next to this one (.env is gitignored; see .env.example).
+# =============================================================================
+
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: palengke-mysql
+    restart: unless-stopped
+    command:
+      # The schema is created utf8mb4 explicitly in every migration script, but
+      # the server defaults are set here too so that anything created ad hoc in
+      # a console session matches, and so client connections negotiate utf8mb4.
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # Every timestamp in this system is UTC. Running the server in UTC means
+      # NOW() in a console session agrees with what the application writes.
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-localrootpw}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-onlinepalengke}
+      MYSQL_USER: ${MYSQL_USER:-palengke}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-palengke}
+    ports:
+      # host:container - change the host side if 3306 is already taken by a
+      # locally installed MySQL.
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # mysqladmin ping with real credentials, not a port check: the entrypoint
+      # starts a temporary server to run initialisation, so a bare TCP probe
+      # reports "up" well before the database is actually usable. start_period
+      # covers that first-run initialisation without counting as failures.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - palengke
+
+  adminer:
+    # Lightweight schema browser. Log in with System "MySQL", Server "mysql"
+    # (the compose service name), and the MYSQL_USER / MYSQL_PASSWORD above.
+    image: adminer:5
+    container_name: palengke-adminer
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+      ADMINER_DESIGN: dracula
+    ports:
+      - "${ADMINER_HOST_PORT:-8080}:8080"
+    networks:
+      - palengke
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.adminer.rule=Host(`adminer.palengke.test`)
+      - traefik.http.routers.adminer.entrypoints=web
+      - traefik.http.services.adminer.loadbalancer.server.port=8080
+
+  traefik:
+    image: traefik:v3.5
+    container_name: palengke-traefik
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      # Only proxy containers that opt in with traefik.enable=true, not every
+      # container Docker Desktop happens to be running on this machine.
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=palengke
+      - --entrypoints.web.address=:80
+      # Exposes the dashboard as the internal `api@internal` service, routed
+      # by the label below - no separate insecure port needed.
+      - --api.dashboard=true
+      - --log.level=INFO
+    ports:
+      - "${TRAEFIK_HOST_PORT:-80}:80"
+    volumes:
+      # Lets Traefik discover containers and their labels. Read-only: Traefik
+      # only ever needs to inspect, never to control, other containers.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - palengke
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dashboard.rule=Host(`traefik.palengke.test`)
+      - traefik.http.routers.dashboard.entrypoints=web
+      - traefik.http.routers.dashboard.service=api@internal
+
+  api:
+    build:
+      context: .
+      dockerfile: admin/src/OnlinePalengke.Api/Dockerfile
+    container_name: palengke-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Dev-only header auth stand-in until phone-OTP/JWT lands - see
+      # admin/src/OnlinePalengke.Api/Authentication/DevHeaderAuthenticationHandler.cs.
+      Auth__EnableDevHeaderScheme: "true"
+      # mysql:3306, not localhost - containers reach each other by service
+      # name on the palengke network, unaffected by the MYSQL_HOST_PORT
+      # mapping above (that mapping is only for the host machine).
+      Database__ConnectionString: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE:-onlinepalengke};User ID=${MYSQL_USER:-palengke};Password=${MYSQL_PASSWORD:-palengke};AllowUserVariables=true;UseAffectedRows=false"
+      Storage__Region: ${AWS_REGION:-ap-southeast-1}
+      Storage__PublicBucket: ${STORAGE_PUBLIC_BUCKET:-palengke-dev-public}
+      Storage__PrivateBucket: ${STORAGE_PRIVATE_BUCKET:-palengke-dev-private}
+      # Read by the AWS SDK's default credential chain. Leave blank until the
+      # dev buckets are provisioned - the container still starts, only actual
+      # S3 calls fail (with a normal ApiException, not a crash).
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+    ports:
+      - "${API_HOST_PORT:-5080}:8080"
+    networks:
+      - palengke
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`api.palengke.test`)
+      - traefik.http.routers.api.entrypoints=web
+      - traefik.http.services.api.loadbalancer.server.port=8080
+
+  admin-web:
+    build:
+      context: .
+      dockerfile: admin/src/OnlinePalengke.Admin/Dockerfile
+    container_name: palengke-admin
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "${ADMIN_HOST_PORT:-5090}:8080"
+    networks:
+      - palengke
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.admin.rule=Host(`admin.palengke.test`)
+      - traefik.http.routers.admin.entrypoints=web
+      - traefik.http.services.admin.loadbalancer.server.port=8080
+
+networks:
+  # Explicit, named network rather than the implicit per-project default, so
+  # Traefik's `--providers.docker.network` has one unambiguous network to
+  # attach through.
+  palengke:
+    name: palengke-net
+
+volumes:
+  # Named volume, so `docker compose down` keeps the data and only
+  # `docker compose down -v` throws it away.
+  mysql-data:
+    name: palengke-mysql-data

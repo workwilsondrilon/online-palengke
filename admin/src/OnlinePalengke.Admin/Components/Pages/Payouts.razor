@@ -1,0 +1,187 @@
+@page "/payouts"
+
+<PageTitle>Payouts · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Payouts"
+            Description="What the platform owes each partner and rider, and the batches used to settle it. Commission is deducted before the net payable figure.">
+    <Actions>
+        <button type="button" class="op-btn op-btn--primary" @onclick="ConfirmGenerateBatch">Generate batch</button>
+    </Actions>
+</PageHeader>
+
+@if (_lastAction is not null)
+{
+    <div class="notice notice--warning" role="status">
+        <span class="notice__glyph" aria-hidden="true">⚠</span>
+        <span>@_lastAction</span>
+    </div>
+}
+
+<div class="stat-grid">
+    <StatTile Label="Owed to partners" Value="@PhpCurrency.Format(_partnerTotal)" Caption="@($"{_partnerCount} stalls")" Tone="primary" />
+    <StatTile Label="Owed to riders" Value="@PhpCurrency.Format(_riderTotal)" Caption="@($"{_riderCount} riders")" Tone="info" />
+    <StatTile Label="Commission retained" Value="@PhpCurrency.Format(_commissionTotal)" Caption="this settlement period" Tone="success" />
+    <StatTile Label="Oldest unpaid" Value="@_oldestLabel" Caption="settle weekly" Tone="warning" />
+</div>
+
+<DataPanel Title="Balances owed"
+           Description="Unsettled orders grouped by payee. Selecting a batch below marks these as paid."
+           Caption="Outstanding balances per partner and rider"
+           IsEmpty="@(PlaceholderData.PayoutBalances.Count == 0)">
+    <Columns>
+        <th scope="col">Payee</th>
+        <th scope="col">Type</th>
+        <th scope="col" class="num">Orders</th>
+        <th scope="col" class="num">Gross</th>
+        <th scope="col" class="num">Commission</th>
+        <th scope="col" class="num">Net payable</th>
+        <th scope="col">Oldest unpaid</th>
+    </Columns>
+    <EmptyContent>
+        <EmptyState Glyph="₱"
+                    Title="Nothing outstanding"
+                    Description="Every delivered order has been settled. New balances accrue as orders are delivered." />
+    </EmptyContent>
+    <ChildContent>
+        @foreach (var balance in PlaceholderData.PayoutBalances)
+        {
+            <tr>
+                <td>
+                    <span class="cell-strong">@balance.PayeeName</span>
+                    <span class="cell-sub">@balance.MarketName</span>
+                </td>
+                <td><StatusBadge Status="@balance.PayeeType" ToneOverride="@(balance.PayeeType == "Rider" ? "info" : "neutral")" /></td>
+                <td class="num">@balance.UnsettledOrders</td>
+                <td class="num"><PhpAmount Value="balance.GrossAmount" /></td>
+                <td class="num"><PhpAmount Value="@(-balance.CommissionAmount)" /></td>
+                <td class="num cell-strong"><PhpAmount Value="balance.NetPayable" /></td>
+                <td>
+                    @if (balance.OldestUnpaidUtc is { } oldest)
+                    {
+                        <ManilaTimestamp ValueUtc="oldest" ShowDateOnly="true" />
+                    }
+                    else
+                    {
+                        <span class="cell-sub">—</span>
+                    }
+                </td>
+            </tr>
+        }
+    </ChildContent>
+    <Footer>
+        Total net payable <PhpAmount Value="_netTotal" ShowIsoCode="true" />.
+    </Footer>
+</DataPanel>
+
+<DataPanel Title="Batches"
+           Description="A batch freezes a set of balances. Mark it paid with the bank or e-wallet reference once the transfer clears."
+           Caption="Generated payout batches"
+           IsEmpty="@(PlaceholderData.PayoutBatches.Count == 0)">
+    <Columns>
+        <th scope="col">Batch</th>
+        <th scope="col">Period</th>
+        <th scope="col" class="num">Payees</th>
+        <th scope="col" class="num">Amount</th>
+        <th scope="col">Payment reference</th>
+        <th scope="col">Paid</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="actions">Actions</th>
+    </Columns>
+    <EmptyContent>
+        <EmptyState Glyph="◫"
+                    Title="No batches generated yet"
+                    Description="Generate a batch to freeze the balances above into a single payment run." />
+    </EmptyContent>
+    <ChildContent>
+        @foreach (var batch in PlaceholderData.PayoutBatches)
+        {
+            <tr>
+                <td class="mono cell-strong">@batch.Reference</td>
+                <td>@ManilaTime.FormatDate(batch.PeriodStart) – @ManilaTime.FormatDate(batch.PeriodEnd)</td>
+                <td class="num">@batch.Payees</td>
+                <td class="num"><PhpAmount Value="batch.TotalAmount" /></td>
+                <td class="mono">@(batch.PaymentReference ?? "—")</td>
+                <td>
+                    @if (batch.PaidAtUtc is { } paid)
+                    {
+                        <ManilaTimestamp ValueUtc="paid" ShowDateOnly="true" />
+                    }
+                    else
+                    {
+                        <span class="cell-sub">Not paid</span>
+                    }
+                </td>
+                <td><StatusBadge Status="@batch.Status" /></td>
+                <td class="actions">
+                    <div class="btn-row">
+                        <button type="button" class="op-btn op-btn--sm" disabled="@(batch.Status == "Paid")" @onclick="() => ConfirmMarkPaid(batch)">Mark paid</button>
+                    </div>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+</DataPanel>
+
+<ConfirmDialog @ref="_confirmDialog" OnConfirm="HandleConfirmed" />
+
+@code {
+    private ConfirmDialog? _confirmDialog;
+    private PayoutBatchRow? _pendingBatch;
+    private string? _lastAction;
+
+    private decimal _partnerTotal;
+    private decimal _riderTotal;
+    private decimal _commissionTotal;
+    private decimal _netTotal;
+    private int _partnerCount;
+    private int _riderCount;
+    private string _oldestLabel = "—";
+
+    protected override void OnInitialized()
+    {
+        var balances = PlaceholderData.PayoutBalances;
+
+        _partnerTotal = balances.Where(b => b.PayeeType == "Partner").Sum(b => b.NetPayable);
+        _riderTotal = balances.Where(b => b.PayeeType == "Rider").Sum(b => b.NetPayable);
+        _commissionTotal = balances.Sum(b => b.CommissionAmount);
+        _netTotal = balances.Sum(b => b.NetPayable);
+        _partnerCount = balances.Count(b => b.PayeeType == "Partner");
+        _riderCount = balances.Count(b => b.PayeeType == "Rider");
+
+        var oldest = balances
+            .Where(b => b.OldestUnpaidUtc.HasValue)
+            .Select(b => b.OldestUnpaidUtc!.Value)
+            .DefaultIfEmpty()
+            .Min();
+
+        _oldestLabel = oldest == default ? "—" : ManilaTime.Relative(oldest);
+    }
+
+    private void ConfirmGenerateBatch()
+    {
+        _pendingBatch = null;
+        _confirmDialog?.Show(
+            title: "Generate a payout batch?",
+            message: $"All {PlaceholderData.PayoutBalances.Count} outstanding balances are frozen into one batch totalling {PhpCurrency.Format(_netTotal)}. Balances accrued after this moment go to the next batch.",
+            confirmText: "Generate batch");
+    }
+
+    private void ConfirmMarkPaid(PayoutBatchRow batch)
+    {
+        _pendingBatch = batch;
+        _confirmDialog?.Show(
+            title: $"Mark {batch.Reference} as paid?",
+            message: $"Records {PhpCurrency.Format(batch.TotalAmount)} as settled across {batch.Payees} payees. Enter the bank or e-wallet reference for the transfer.",
+            confirmText: "Mark paid",
+            requiresReason: true);
+    }
+
+    private void HandleConfirmed(string reference)
+    {
+        _lastAction = _pendingBatch is { } batch
+            ? $"Not wired yet — marking {batch.Reference} paid with reference {reference.Trim()} will call the Application layer once it exists."
+            : $"Not wired yet — generating a batch for {PhpCurrency.Format(_netTotal)} will call the Application layer once it exists.";
+
+        _pendingBatch = null;
+    }
+}

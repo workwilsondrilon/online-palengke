@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>OnlinePalengke.Migrations</RootNamespace>
+    <AssemblyName>OnlinePalengke.Migrations</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="dbup-mysql" Version="6.1.0" />
+    <!--
+      dbup-mysql pulls MySqlConnector transitively (2.3.5). We reference it
+      explicitly and float it forward because the runner uses
+      MySqlConnectionStringBuilder directly to validate and redact the
+      connection string before it is logged.
+    -->
+    <PackageReference Include="MySqlConnector" Version="2.6.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
+  </ItemGroup>
+
+  <!--
+    Migration scripts are embedded so the runner ships as one self-contained
+    artifact in CI. DbUp discovers them by resource name and applies them in
+    ordinal name order, which is why every script is zero-padded numbered.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts\*.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

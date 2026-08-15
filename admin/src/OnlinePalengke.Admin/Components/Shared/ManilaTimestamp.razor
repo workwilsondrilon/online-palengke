@@ -1,0 +1,57 @@
+@*
+    Renders a UTC instant as Manila local time inside a <time> element, with the
+    machine-readable UTC value kept on the datetime attribute.
+*@
+
+<time class="timestamp" datetime="@ManilaTime.ToIso8601(ValueUtc)" title="@Tooltip">
+    @Text
+</time>
+
+@code {
+    /// <summary>The instant, in UTC, exactly as it arrives from the API.</summary>
+    [Parameter, EditorRequired]
+    public DateTimeOffset ValueUtc { get; set; }
+
+    /// <summary>Renders "3 h ago" instead of an absolute time. The absolute time stays in the tooltip.</summary>
+    [Parameter]
+    public bool Relative { get; set; }
+
+    /// <summary>Renders the date only.</summary>
+    [Parameter]
+    public bool ShowDateOnly { get; set; }
+
+    /// <summary>Renders the time only.</summary>
+    [Parameter]
+    public bool ShowTimeOnly { get; set; }
+
+    /// <summary>Appends the "PHT" zone abbreviation to the visible text.</summary>
+    [Parameter]
+    public bool ShowZone { get; set; }
+
+    private string Text
+    {
+        get
+        {
+            if (Relative)
+            {
+                return ManilaTime.Relative(ValueUtc);
+            }
+
+            if (ShowDateOnly)
+            {
+                return ManilaTime.FormatDate(ValueUtc);
+            }
+
+            if (ShowTimeOnly)
+            {
+                return ShowZone
+                    ? $"{ManilaTime.FormatTime(ValueUtc)} {ManilaTime.Abbreviation}"
+                    : ManilaTime.FormatTime(ValueUtc);
+            }
+
+            return ShowZone ? ManilaTime.FormatWithZone(ValueUtc) : ManilaTime.Format(ValueUtc);
+        }
+    }
+
+    private string Tooltip => ManilaTime.FormatWithZone(ValueUtc);
+}

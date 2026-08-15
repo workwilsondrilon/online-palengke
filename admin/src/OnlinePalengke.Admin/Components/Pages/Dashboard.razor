@@ -1,0 +1,127 @@
+@page "/"
+
+<PageTitle>Dashboard · Online Palengke Admin</PageTitle>
+
+<PageHeader Title="Daily operations"
+            Description="Where every market stands this morning: order flow, quote windows still open for bidding, and who is on the road.">
+    <Actions>
+        <span class="op-badge op-badge--info">@ManilaTime.FormatDate(ManilaTime.Today)</span>
+    </Actions>
+</PageHeader>
+
+<div class="notice notice--info">
+    <span class="notice__glyph" aria-hidden="true">ℹ</span>
+    <span>
+        <strong>Shell build.</strong> Every figure on this page comes from static sample data in
+        <span class="mono">ViewModels/PlaceholderData.cs</span>. Nothing is queried yet.
+    </span>
+</div>
+
+<div class="stat-grid">
+    @foreach (var tile in PlaceholderData.DashboardTiles)
+    {
+        <StatTile Label="@tile.Label" Value="@tile.Value" Caption="@tile.Caption" Tone="@tile.Tone" />
+    }
+</div>
+
+<div class="col-2 col-2--wide-first">
+    <div class="stack">
+        <DataPanel Title="Today's orders by status"
+                   Description="Counts reset at midnight Asia/Manila."
+                   IsEmpty="@(_statuses.Count == 0)"
+                   EmptyTitle="No orders placed today yet"
+                   EmptyDescription="Orders appear here as soon as the first shopping list is submitted.">
+            <Columns>
+                <th scope="col">Status</th>
+                <th scope="col">Share</th>
+                <th scope="col" class="num">Orders</th>
+            </Columns>
+            <ChildContent>
+                @foreach (var row in _statuses)
+                {
+                    <tr>
+                        <td><StatusBadge Status="@row.Status" /></td>
+                        <td style="width: 55%">
+                            <div class="status-bar__track">
+                                <span class="status-bar__fill" style="width: @Percent(row.Count)%"></span>
+                            </div>
+                        </td>
+                        <td class="num">@row.Count</td>
+                    </tr>
+                }
+            </ChildContent>
+            <Footer>
+                @_totalOrders orders across all statuses.
+            </Footer>
+        </DataPanel>
+
+        <DataPanel Title="Open quote windows"
+                   Description="Partners can still bid on these shopping lists."
+                   IsEmpty="@(PlaceholderData.OpenQuoteWindows.Count == 0)"
+                   EmptyTitle="No quote windows are open"
+                   EmptyDescription="Windows open on the market's schedule and close at the configured cutoff.">
+            <Columns>
+                <th scope="col">Market</th>
+                <th scope="col">Window</th>
+                <th scope="col">Closes</th>
+                <th scope="col" class="num">Lists</th>
+                <th scope="col" class="num">Quotes</th>
+            </Columns>
+            <ChildContent>
+                @foreach (var window in PlaceholderData.OpenQuoteWindows)
+                {
+                    <tr>
+                        <td class="cell-strong">@window.MarketName</td>
+                        <td>@window.WindowLabel</td>
+                        <td>
+                            <ManilaTimestamp ValueUtc="window.ClosesAtUtc" Relative="true" />
+                            <span class="cell-sub"><ManilaTimestamp ValueUtc="window.ClosesAtUtc" ShowTimeOnly="true" ShowZone="true" /></span>
+                        </td>
+                        <td class="num">@window.ShoppingLists</td>
+                        <td class="num">@window.QuotesReceived</td>
+                    </tr>
+                }
+            </ChildContent>
+        </DataPanel>
+    </div>
+
+    <DataPanel Title="Riders on shift"
+               Description="Clocked in for a delivery window today."
+               IsEmpty="@(PlaceholderData.RidersOnShift.Count == 0)"
+               EmptyTitle="No riders on shift"
+               EmptyDescription="Riders appear here once they clock in for a window.">
+        <Columns>
+            <th scope="col">Rider</th>
+            <th scope="col" class="num">Stops</th>
+            <th scope="col">Status</th>
+        </Columns>
+        <ChildContent>
+            @foreach (var rider in PlaceholderData.RidersOnShift)
+            {
+                <tr>
+                    <td>
+                        <span class="cell-strong">@rider.RiderName</span>
+                        <span class="cell-sub">@rider.MarketName · @rider.WindowLabel</span>
+                    </td>
+                    <td class="num">@rider.AssignedStops</td>
+                    <td><StatusBadge Status="@rider.Status" /></td>
+                </tr>
+            }
+        </ChildContent>
+    </DataPanel>
+</div>
+
+@code {
+    private readonly IReadOnlyList<OrderStatusCount> _statuses = PlaceholderData.OrdersByStatus;
+
+    private int _totalOrders;
+    private int _peakCount = 1;
+
+    protected override void OnInitialized()
+    {
+        _totalOrders = _statuses.Sum(s => s.Count);
+        _peakCount = _statuses.Count == 0 ? 1 : Math.Max(1, _statuses.Max(s => s.Count));
+    }
+
+    private int Percent(int count) => (int)Math.Round(count * 100.0 / _peakCount);
+}

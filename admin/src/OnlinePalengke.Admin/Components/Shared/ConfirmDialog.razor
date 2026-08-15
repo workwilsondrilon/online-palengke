@@ -1,0 +1,160 @@
+@*
+    Modal confirmation. Held by @ref and opened imperatively:
+
+        <ConfirmDialog @ref="_confirm" OnConfirm="HandleConfirmed" />
+        ...
+        _confirm?.Show("Take this post down?", "Customers stop seeing it immediately.");
+
+    Escape and the backdrop both cancel. The confirm button receives focus on open.
+*@
+
+@if (_visible)
+{
+    <div class="op-modal-layer">
+        <div class="op-modal-backdrop" @onclick="Cancel"></div>
+        <div class="op-modal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="@_titleId"
+             aria-describedby="@_bodyId"
+             tabindex="-1"
+             @onkeydown="HandleKeyDown">
+            <h2 class="op-modal__title" id="@_titleId">@_title</h2>
+            <p class="op-modal__body" id="@_bodyId">@_message</p>
+
+            @if (_requiresReason)
+            {
+                <div class="field">
+                    <label class="field__label" for="@_reasonId">Reason</label>
+                    <textarea id="@_reasonId"
+                              class="field__control"
+                              rows="3"
+                              placeholder="Recorded on the audit trail"
+                              @bind="_reason"
+                              @bind:event="oninput"></textarea>
+                </div>
+            }
+
+            <div class="op-modal__actions">
+                <button type="button" class="op-btn op-btn--ghost" @onclick="Cancel">@_cancelText</button>
+                <button type="button"
+                        class="op-btn @(_destructive ? "op-btn--danger" : "op-btn--primary")"
+                        disabled="@(_requiresReason && string.IsNullOrWhiteSpace(_reason))"
+                        @ref="_confirmButton"
+                        @onclick="ConfirmAsync">
+                    @_confirmText
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly string _titleId = $"confirm-title-{Guid.NewGuid():N}";
+    private readonly string _bodyId = $"confirm-body-{Guid.NewGuid():N}";
+    private readonly string _reasonId = $"confirm-reason-{Guid.NewGuid():N}";
+
+    private ElementReference _confirmButton;
+    private bool _visible;
+    private bool _shouldFocus;
+    private bool _destructive;
+    private bool _requiresReason;
+    private string _title = string.Empty;
+    private string _message = string.Empty;
+    private string _confirmText = "Confirm";
+    private string _cancelText = "Cancel";
+    private string _reason = string.Empty;
+
+    /// <summary>
+    /// Raised when the operator confirms. The payload is the typed reason, or an empty
+    /// string when the dialog was not opened with <c>requiresReason</c>.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnConfirm { get; set; }
+
+    /// <summary>Raised when the operator cancels, presses Escape, or clicks the backdrop.</summary>
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    /// <summary>True while the dialog is on screen.</summary>
+    public bool IsOpen => _visible;
+
+    /// <summary>Opens the dialog.</summary>
+    public void Show(
+        string title,
+        string message,
+        string confirmText = "Confirm",
+        string cancelText = "Cancel",
+        bool destructive = false,
+        bool requiresReason = false)
+    {
+        _title = title;
+        _message = message;
+        _confirmText = confirmText;
+        _cancelText = cancelText;
+        _destructive = destructive;
+        _requiresReason = requiresReason;
+        _reason = string.Empty;
+        _visible = true;
+        _shouldFocus = true;
+        StateHasChanged();
+    }
+
+    /// <summary>Closes the dialog without raising <see cref="OnConfirm"/>.</summary>
+    public void Close()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (_requiresReason && string.IsNullOrWhiteSpace(_reason))
+        {
+            return;
+        }
+
+        var reason = _reason;
+        _visible = false;
+
+        if (OnConfirm.HasDelegate)
+        {
+            await OnConfirm.InvokeAsync(reason);
+        }
+    }
+
+    private async Task Cancel()
+    {
+        _visible = false;
+
+        if (OnCancel.HasDelegate)
+        {
+            await OnCancel.InvokeAsync();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            await Cancel();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_shouldFocus && _visible)
+        {
+            _shouldFocus = false;
+
+            try
+            {
+                await _confirmButton.FocusAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                // The element went away between render and focus; nothing to do.
+            }
+        }
+    }
+}
