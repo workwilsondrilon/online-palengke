@@ -49,6 +49,14 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IUnitRepository, UnitRepository>();
+        services.AddScoped<IItemRepository, ItemRepository>();
+        services.AddScoped<IItemUnitRepository, ItemUnitRepository>();
+
+        services.AddScoped<IMarketRepository, MarketRepository>();
+        services.AddScoped<IDeliveryWindowRepository, DeliveryWindowRepository>();
     }
 
     private static void AddAuth(IServiceCollection services, IConfiguration configuration)
