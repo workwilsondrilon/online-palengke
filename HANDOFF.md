@@ -91,18 +91,21 @@ hard way.
    time — before that, every push only touched `.NET`/YAML files). Fixed by pinning
    `compileSdk = 37` explicitly in all three `android/app/build.gradle.kts`.
 
-## What's in progress right now — Epic 3
+## Epic 3 — done (see the "Epic 3 — closed" section below for the full task list)
 
-**Both ends of Epic 3 are done: an admin can create a market, draw its service polygon
-and save it, and a customer screen calls the real eligibility check — backend through
-Api through the Admin↔API pattern through Leaflet through the Razor pages, and
-separately the customer app's own address screen, all committed and pushed, all verified
-against the live API and DB.** Tasks #24-#32 (below) are done. What's left is #33: one
-final pass confirming the exit criteria end-to-end in a single run rather than as
-separately-verified pieces (admin draws → customer app itself, not a Dart test script,
-sees the result). The `.col-2` layout bug flagged under #30 is still open — it wasn't
-blocking (verification worked around it with a temporary CSS override) but it's still
-there for whoever next touches `MarketDetail.razor` or the `Dashboard`.
+An admin can create a market, draw its service polygon and save it; a customer address
+inside it is accepted and one outside is refused with a clear message. Proven end-to-end
+in one continuous run, not just piece by piece — see task #33 below.
+
+## What's next — Epic 4
+
+**Not started.** Per the plan (`Epic 4 — Onboarding, KYC & Partner Storefront`), this is
+partner/rider onboarding and verification (documents, the admin `Verification.razor`
+placeholder page becoming real) plus the partner app's own storefront-setup flow. A
+fresh session picking this up should read the plan's Epic 4 section first — nothing
+below is a locked decision, just a pointer to where to start. The `.col-2` layout bug
+flagged under Epic 3's #30 is still open (unrelated, doesn't block Epic 4, but worth a
+look if Epic 4 touches `MarketDetail.razor`-adjacent layout patterns).
 
 ### Epic 3 scope (from the plan)
 
@@ -312,13 +315,32 @@ persists there between sessions, this file is the source of truth):
    just what the C# source says they should be. (One thing this caught along the way,
    unrelated to the app code: `MarketEligibilityService` only matches *active* markets —
    an `onboarding` market with a saved polygon still correctly reports no coverage.)
-10. **#33 End-to-end verification** — the actual exit criteria scenario: create a market
-    in admin, draw a real polygon, save it, then hit the eligibility endpoint (or the
-    customer app) with a point inside and a point outside and confirm accept/reject with
-    a clear message. Do this against the real local database, same pattern used to verify
-    #27. The Application/Infrastructure layers underneath this are already proven correct
-    (see #27) — this step is specifically about proving the wiring above them (Api →
-    Admin/Flutter → user-visible result), not re-proving the geometry.
+10. **#33 End-to-end verification** ✅ done. Ran the exit criteria as one continuous
+    session against the real local database, no reset in between the two halves (unlike
+    #31/#32, which each verified their own half separately against test rows cleaned up
+    before the other's session started): Playwright drove the real Blazor admin UI to
+    create "Exit Criteria Market", draw a real polygon with Leaflet.draw centered on
+    (14.5995, 120.9842), save it, and activate the market — then, immediately after, in
+    the same live database state, a real customer OTP-logged in through the actual
+    `AuthApi`/`SessionManager`/`ApiClient`/`EligibilityApi` production code path (the
+    exact code `EligibilityPage` calls) and checked eligibility: the market's own
+    coordinates correctly came back `isEligible: true` with `Exit Criteria Market` in the
+    returned list, and a point in Cebu (~570 km away) correctly came back `false` with
+    the refusal message. Both admin and customer test rows were deleted immediately
+    after. **This is the Epic 3 exit criterion, proven, closing the epic**: an admin can
+    create a market, draw its service polygon, and a customer address inside it is
+    accepted while one outside is refused with a clear message.
+
+## Epic 3 — closed
+
+All ten tasks (#24-#33) are done, committed, pushed, and each verified against the real
+local database — most of them in a real browser or through the real production client
+code path, not just by reading the code. The `.col-2` CSS grid layout bug flagged under
+#30 remains open (unrelated to Epic 3's own scope, still affects `MarketDetail.razor` and
+the `Dashboard`) — worth a dedicated look whenever those pages are next touched. Item
+image upload (flagged under #31) and a `flutter_map` pin-picker for the customer address
+screen (flagged under #32) are both deliberately-scoped-out pieces of future work, not
+gaps in what Epic 3 asked for.
 
 ## Working patterns established this session (keep following these)
 
