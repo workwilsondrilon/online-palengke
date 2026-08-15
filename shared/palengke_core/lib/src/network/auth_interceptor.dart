@@ -119,7 +119,7 @@ class AuthInterceptor extends Interceptor {
     if (options.skipAuth) return false;
     if (options.didRetryAfterRefresh) return false;
     // Never refresh in reaction to the refresh call itself.
-    if (ApiEndpoints.unauthenticatedPaths.contains(options.path)) return false;
+    if (ApiEndpoints.isUnauthenticatedPath(options.path)) return false;
     if (!_session.isAuthenticated) return false;
     return true;
   }

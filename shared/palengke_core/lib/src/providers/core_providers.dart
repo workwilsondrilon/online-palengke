@@ -51,7 +51,7 @@ final publicApiClientProvider = Provider<ApiClient>((ref) {
 });
 
 final authApiProvider = Provider<AuthApi>(
-  (ref) => AuthApi(ref.watch(publicApiClientProvider)),
+  (ref) => AuthApi(ref.watch(publicApiClientProvider), ref.watch(palengkeConfigProvider).role),
 );
 
 /// HTTP client for everything else: attaches the bearer token and performs

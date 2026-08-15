@@ -1,3 +1,4 @@
+import '../config/palengke_config.dart';
 import '../core/api_endpoints.dart';
 import '../core/result.dart';
 import '../network/api_client.dart';
@@ -10,24 +11,28 @@ import 'auth_tokens.dart';
 ///   * OTP requests are not blocked by a missing/expired bearer token, and
 ///   * a 401 from `/api/auth/refresh` cannot recurse into another refresh.
 class AuthApi {
-  const AuthApi(this._client);
+  const AuthApi(this._client, this._role);
 
   final ApiClient _client;
 
-  /// `POST /api/auth/otp/request`
+  /// Which app this is — determines the role a brand-new phone number
+  /// registers as. See [ApiEndpoints.otpRequest].
+  final PalengkeRole _role;
+
+  /// `POST /api/{role}/auth/otp/request`
   Future<Result<OtpChallenge>> requestOtp(OtpRequest request) {
     return _client.post<OtpChallenge>(
-      ApiEndpoints.otpRequest,
+      ApiEndpoints.otpRequest(_role),
       body: request.toJson(),
       skipAuth: true,
       decode: (data) => OtpChallenge.fromJson(Decode.map(data)),
     );
   }
 
-  /// `POST /api/auth/otp/verify`
+  /// `POST /api/{role}/auth/otp/verify`
   Future<Result<AuthSessionDto>> verifyOtp(OtpVerification verification) {
     return _client.post<AuthSessionDto>(
-      ApiEndpoints.otpVerify,
+      ApiEndpoints.otpVerify(_role),
       body: verification.toJson(),
       skipAuth: true,
       // The OTP code is a credential; keep it out of the debug log.
