@@ -24,6 +24,7 @@ public sealed class OtpAuthService(
     ISmsSender sms,
     AuthSessionFactory sessionFactory,
     IRefreshTokenRepository refreshTokens,
+    IOtpVerificationSettingsRepository verificationSettings,
     IClock clock,
     ILogger<OtpAuthService> logger)
 {
@@ -117,7 +118,19 @@ public sealed class OtpAuthService(
             throw new ValidationException("code", "This code is invalid or has expired. Request a new one.");
         }
 
-        if (!hasher.Verify(submittedCode.Trim(), otp.CodeHash))
+        var bypassEnabled = (await verificationSettings.GetAsync(cancellationToken))?.BypassEnabled ?? false;
+
+        if (bypassEnabled)
+        {
+            // Only the code-correctness check is skipped -- everything above (a genuine
+            // request must exist, must not be expired, must not have exceeded its attempt
+            // budget) still applies. See OtpVerificationSettings' remarks for why this
+            // exists: no real SMS provider is wired up yet.
+            logger.LogWarning(
+                "OTP verification BYPASSED for {Phone} ({Role}) -- an admin has enabled the bypass switch.",
+                phone, role);
+        }
+        else if (!hasher.Verify(submittedCode.Trim(), otp.CodeHash))
         {
             otp.RecordFailedAttempt();
             await otpCodes.RecordFailedAttemptAsync(otp.Id, otp.AttemptCount, cancellationToken);

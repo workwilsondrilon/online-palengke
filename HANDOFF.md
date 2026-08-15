@@ -60,11 +60,24 @@ hard way.
   **SMS sending is still stubbed** — `LoggingSmsSender` in Infrastructure logs the OTP
   code instead of sending a real SMS. This was explicit, requested scope ("Provision OTP
   for now... no actual OTP sent") and remains a deliberate gap against the plan's literal
-  Epic 2 exit criterion ("a real phone number receives a real OTP... on a device") — swap
-  the one DI registration in `OnlinePalengke.Infrastructure/DependencyInjection.cs` for a
-  real Semaphore/Movider adapter when the user wants to revisit it; nothing above
-  `ISmsSender` needs to change. Needs a provider choice and real API credentials from the
-  user before any session can pick this up — not something to start without that.
+  Epic 2 exit criterion ("a real phone number receives a real OTP... on a device"). The
+  chosen provider is decided — **m360** — but not yet integrated; swap the one DI
+  registration in `OnlinePalengke.Infrastructure/DependencyInjection.cs` for a real m360
+  adapter when the user is ready; nothing above `ISmsSender` needs to change.
+
+  In the meantime, an **admin-configurable OTP verification bypass** now exists so this
+  gap doesn't block QA/demos: `OtpVerificationSettings` (Domain/Identity), a single-row
+  `otp_verification_settings` table (migration `003_otp_verification_settings.sql`,
+  singleton-row pattern — `id` pinned to 1 by a CHECK, no seed row, a missing row means
+  bypass is off), `OtpSettingsService`, and two new admin-only endpoints —
+  `GET`/`PUT /api/admin/auth/otp-settings`. When enabled, `OtpAuthService.VerifyOtpAsync`
+  skips *only* the hashed-code-correctness check — the OTP row still has to genuinely
+  exist, be unexpired, and not have exceeded its attempt budget — and logs a warning per
+  bypassed verification. Verified live end-to-end: default state (no row) reports
+  `bypassEnabled: false`; a wrong code is rejected with bypass off (control case); toggling
+  bypass on via the admin endpoint persists and is reflected on a subsequent `GET`; the
+  same wrong code then succeeds and returns a real token pair; toggling back off is what
+  the dev DB was left in.
 
 ### Two real bugs found and fixed this session (worth knowing about, won't recur but the pattern might)
 

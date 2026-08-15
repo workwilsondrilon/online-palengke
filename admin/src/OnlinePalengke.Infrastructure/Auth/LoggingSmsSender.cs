@@ -11,9 +11,11 @@ namespace OnlinePalengke.Infrastructure.Auth;
 /// <b>No SMS provider is wired up yet.</b> This is the only registered implementation of
 /// <see cref="ISmsSender"/> today, in every environment including whatever runs in CI —
 /// there is no environment gate here because there is, as yet, nothing to gate: swap the
-/// DI registration in <c>DependencyInjection.AddInfrastructure</c> for a real Semaphore or
-/// Movider adapter when one exists, and this class can be deleted. Nothing above
-/// <see cref="ISmsSender"/> needs to change when that happens.
+/// DI registration in <c>DependencyInjection.AddInfrastructure</c> for a real m360 adapter
+/// when one exists, and this class can be deleted. Nothing above
+/// <see cref="ISmsSender"/> needs to change when that happens. Until then, an admin can
+/// toggle <c>OtpVerificationSettings</c>' bypass switch instead of relying on this stub's
+/// log output.
 /// </para>
 /// <para>
 /// Logged at <see cref="LogLevel.Information"/> — deliberately visible by default, not

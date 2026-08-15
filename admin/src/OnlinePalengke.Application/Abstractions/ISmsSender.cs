@@ -5,8 +5,11 @@ namespace OnlinePalengke.Application.Abstractions;
 /// The only implementation registered today (<c>LoggingSmsSender</c> in
 /// Infrastructure) does not send a real SMS — it logs the code instead. That
 /// is deliberate for this stage of the project, not an oversight: swap the
-/// DI registration for a real provider (Semaphore or Movider) when one is
-/// wired up, without anything above this interface needing to change.
+/// DI registration for a real m360 adapter (the chosen provider) when one is
+/// wired up, without anything above this interface needing to change. Until
+/// then, an admin can also flip the OTP verification bypass switch (see
+/// <see cref="OnlinePalengke.Domain.Identity.OtpVerificationSettings"/>) rather than
+/// reading codes out of logs.
 /// </remarks>
 public interface ISmsSender
 {

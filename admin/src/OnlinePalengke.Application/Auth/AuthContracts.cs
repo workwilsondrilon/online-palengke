@@ -1,7 +1,8 @@
 namespace OnlinePalengke.Application.Auth;
 
 /// <summary>
-/// Wire DTOs for the four public auth endpoints plus admin login.
+/// Wire DTOs for the four public auth endpoints, admin login, and the admin-only OTP
+/// bypass setting.
 /// </summary>
 /// <remarks>
 /// Property names here are load-bearing: they are matched exactly (as
@@ -52,3 +53,8 @@ public sealed record AdminLoginResponse(
     AdminUserResponse User);
 
 public sealed record AdminUserResponse(long Id, string Email);
+
+public sealed record SetOtpBypassRequest(bool BypassEnabled);
+
+/// <param name="UpdatedAtUtc">Null when no admin has ever changed the setting.</param>
+public sealed record OtpBypassSettingsResponse(bool BypassEnabled, DateTime? UpdatedAtUtc);

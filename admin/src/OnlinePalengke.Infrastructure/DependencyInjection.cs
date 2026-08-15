@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IOtpVerificationSettingsRepository, OtpVerificationSettingsRepository>();
 
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IUnitRepository, UnitRepository>();
@@ -70,7 +71,7 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
 
         // The only ISmsSender today - see LoggingSmsSender's remarks. Swap this one line
-        // for a real Semaphore/Movider adapter when one is built; nothing else changes.
+        // for a real m360 adapter when one is built; nothing else changes.
         services.AddSingleton<ISmsSender, LoggingSmsSender>();
     }
 

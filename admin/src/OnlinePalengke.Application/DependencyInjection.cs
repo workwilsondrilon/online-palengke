@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<AuthSessionFactory>();
         services.AddScoped<OtpAuthService>();
         services.AddScoped<AdminAuthService>();
+        services.AddScoped<OtpSettingsService>();
 
         services.AddScoped<CategoryService>();
         services.AddScoped<UnitService>();

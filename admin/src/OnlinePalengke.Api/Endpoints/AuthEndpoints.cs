@@ -78,4 +78,25 @@ public static class AuthEndpoints
                 .ProducesProblem(StatusCodes.Status400BadRequest)
                 .ProducesProblem(StatusCodes.Status403Forbidden);
     }
+
+    /// <summary>
+    /// Maps <c>GET/PUT /auth/otp-settings</c>: the admin-only switch that lets phone-OTP
+    /// verification be bypassed while no real SMS provider (m360) is wired up yet.
+    /// </summary>
+    public static void MapOtpSettingsEndpoint(this RouteGroupBuilder adminGroup)
+    {
+        var settings = adminGroup.MapGroup("/auth/otp-settings").WithTags("Auth");
+
+        settings.MapGet("/", async (OtpSettingsService service, CancellationToken ct) =>
+                Results.Ok(await service.GetAsync(ct)))
+            .WithName("Admin.OtpSettings.Get")
+            .WithSummary("Whether phone-OTP verification is currently bypassed.")
+            .Produces<OtpBypassSettingsResponse>();
+
+        settings.MapPut("/", async ([FromBody] SetOtpBypassRequest request, OtpSettingsService service, CancellationToken ct) =>
+                Results.Ok(await service.SetBypassEnabledAsync(request.BypassEnabled, ct)))
+            .WithName("Admin.OtpSettings.Set")
+            .WithSummary("Turns the OTP verification bypass on or off.")
+            .Produces<OtpBypassSettingsResponse>();
+    }
 }

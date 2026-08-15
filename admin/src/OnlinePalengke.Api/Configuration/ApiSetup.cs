@@ -95,6 +95,7 @@ public static class ApiSetup
         var admin = api.MapGroup("/admin")
             .RequireAuthorization(PolicyFor(UserRole.Admin));
         admin.MapAdminLoginEndpoint();
+        admin.MapOtpSettingsEndpoint();
         admin.MapUploadEndpoints("admin");
         admin.MapCatalogEndpoints();
         admin.MapAdminMarketEndpoints();
