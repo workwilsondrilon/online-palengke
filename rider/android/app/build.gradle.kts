@@ -6,7 +6,11 @@ plugins {
 
 android {
     namespace = "ph.onlinepalengke.palengke_rider"
-    compileSdk = flutter.compileSdkVersion
+    // flutter.compileSdkVersion (36 on Flutter 3.44.8) is one below what
+    // flutter_secure_storage (pulled in via shared/palengke_core) requires.
+    // compileSdk is backward compatible, so pinning it above the bundled
+    // default is the correct fix, not a workaround.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
