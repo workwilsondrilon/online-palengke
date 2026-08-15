@@ -93,12 +93,14 @@ hard way.
 
 ## What's in progress right now — Epic 3
 
-**Backend is fully built and reachable over HTTP, and Admin can now sign in and talk to
-it — Domain through Api through the Admin↔API integration pattern, committed and pushed,
-verified against the real local database, real JWT auth, and (for #29) a real browser.**
-Tasks #24-#29 (below) are done. What's left is Leaflet and wiring the Razor pages to real
-data, plus the customer app — i.e. replacing the last of `PlaceholderData` with the
-backend that's now fully reachable and authenticated.
+**Backend is fully built and reachable over HTTP, Admin can sign in and talk to it, and
+the map editor is real — Domain through Api through the Admin↔API integration pattern
+through Leaflet, committed and pushed, verified against the real local database, real JWT
+auth, and (for #29/#30) a real browser.** Tasks #24-#30 (below) are done. What's left is
+wiring the Razor pages to real data (#31 — also the moment to investigate the `.col-2`
+layout bug flagged under #30, since it affects the very pages #31 touches) and the
+customer app — i.e. replacing the last of `PlaceholderData` with the backend that's now
+fully reachable, authenticated, and mappable.
 
 ### Epic 3 scope (from the plan)
 
@@ -223,22 +225,36 @@ persists there between sessions, this file is the source of truth):
    signed in** (the actual deliverable this task exists for); Sign out returns to
    `/login` and a subsequent visit is redirected again, confirming the session was really
    cleared, not just hidden client-side.
-7. **#30 Vendor Leaflet + implement the map JS interop — not started.** **This seam is
-   unusually well-prepared, read it before doing anything else in this task**:
-   `admin/src/OnlinePalengke.Admin/wwwroot/lib/leaflet/README.md` gives exact pinned
-   versions (Leaflet 1.9.x, Leaflet.draw 1.0.4), exact files to vendor, and a numbered
-   wiring checklist. `Components/App.razor` has four commented-out tags marked
-   `LEAFLET SEAM` ready to uncomment. `Components/Markets/ServiceAreaMap.razor` already
-   declares the full parameter contract (`MarketId`, `InitialPolygonGeoJson`,
-   `OnPolygonChanged`, an `ElementReference` host) — implementing it is adding
-   `wwwroot/js/service-area-map.js` (`init`/`load`/`destroy`) and JS interop glue, not
-   redesigning anything. The GeoJSON this map produces/consumes is exactly what
-   `UpdateServiceAreaRequest.PolygonGeoJson` expects — no conversion needed on the Admin
-   side, `MarketService` does the WKT flip server-side. Confirmed in an earlier session:
-   outbound internet access works fine for `curl`ing the library files from jsdelivr to
-   vendor them locally. Tile source undecided — public OSM tiles are the zero-setup
-   default for now; the README flags this needs revisiting before real production
-   traffic.
+7. **#30 Vendor Leaflet + implement the map JS interop** ✅ done, committed (`ed0d099`).
+   Leaflet 1.9.4 and Leaflet.draw 1.0.4 vendored into `wwwroot/lib/leaflet/` (fetched from
+   jsdelivr, matching the README's pinned versions — not a CDN reference at runtime), the
+   four `LEAFLET SEAM` tags in `App.razor` uncommented. `ServiceAreaMap.razor` is a real
+   editor now: `wwwroot/js/service-area-map.js` does `init`/`load`/`destroy`, one Leaflet
+   map instance per element id, at most one polygon at a time (matches a market having a
+   single service area — a new draw or a finished edit replaces whatever was there), edits
+   flow back to Blazor via `[JSInvokable] OnPolygonEditedFromJs`. Parameter contract
+   (`MarketId`, `InitialPolygonGeoJson`, `OnPolygonChanged`, `ReadOnly`) is unchanged from
+   the seam, as intended. Tile source is still public OSM tiles (zero-setup default,
+   unchanged from before — revisit before real production traffic, per the README).
+
+   **Verified in both headless and headed real Chromium** against the live app: a
+   market's saved polygon loads and the view fits its bounds, the draw toolbar draws a new
+   polygon on a market with none, edits round-trip back through the `[JSInvokable]`
+   callback correctly, no console errors.
+
+   **Found but did NOT fix — flagged for a dedicated follow-up, read before touching
+   `admin.css` layout again:** `.col-2`/`.col-2--wide-first` (the two-column grid used by
+   `MarketDetail.razor` and the `Dashboard`) collapses to ~180px wide regardless of
+   viewport size, when rendered through the live Blazor Server circuit — confirmed
+   unrelated to this session's work (reproduces on the untouched Dashboard too) and
+   confirmed *not* a CSS authoring bug (the exact same markup + `admin.css`, served
+   statically with no Blazor involved at all, lays out correctly at full width). Also not
+   a headless-only artifact — reproduces in a real headed Chromium window too. A
+   `resize` event does not fix it. Root cause not found; something about how the live
+   circuit renders this specific grid differs from a plain static page load. This
+   materially affects usability of `.col-2` pages today (the working map from this task is
+   visually squeezed into a sliver on `MarketDetail.razor`) — worth its own investigation
+   before or during #31, since #31 touches these same pages anyway.
 8. **#31 Wire the Razor pages to real data — not started.** `Categories.razor`,
    `Items.razor`, `Units.razor`, `MarketList.razor`, `MarketDetail.razor` (including
    delivery windows) swap `PlaceholderData.X` for `AdminApiClient` calls. Keep
