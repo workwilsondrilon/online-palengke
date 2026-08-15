@@ -93,11 +93,12 @@ hard way.
 
 ## What's in progress right now — Epic 3
 
-**Backend is fully built and reachable over HTTP now — Domain through Api, committed and
-pushed, verified against the real local database and real JWT auth.** Tasks #24-#28
-(below) are done. What's left is the Admin-to-API integration pattern, Leaflet, and the
-customer app — i.e. everything that makes the built-and-reachable backend visible in an
-actual UI.
+**Backend is fully built and reachable over HTTP, and Admin can now sign in and talk to
+it — Domain through Api through the Admin↔API integration pattern, committed and pushed,
+verified against the real local database, real JWT auth, and (for #29) a real browser.**
+Tasks #24-#29 (below) are done. What's left is Leaflet and wiring the Razor pages to real
+data, plus the customer app — i.e. replacing the last of `PlaceholderData` with the
+backend that's now fully reachable and authenticated.
 
 ### Epic 3 scope (from the plan)
 
@@ -187,13 +188,41 @@ persists there between sessions, this file is the source of truth):
    polygon (accepted, market returned) and a point outside it (refused with the clear
    message) — this is the literal Epic 3 exit criterion, passing against the real stack.
    All test data cleaned up afterward via the same DELETE endpoints.
-6. **#29 AdminApiClient + admin login + Blazor auth-state — not started.** The reusable
-   pattern described above. Needs a real login page (none exists yet — Admin currently
-   has zero auth UI) and something implementing Blazor Server's
-   `AuthenticationStateProvider` so a signed-in session survives across the SignalR
-   circuit. Calls `POST /api/admin/auth/login` (already built and verified in Epic 2).
-   This is the task HANDOFF from the prior session called out as needing focused
-   attention — treat it as its own deliverable, not something to rush alongside #28.
+6. **#29 AdminApiClient + admin login + Blazor auth-state** ✅ done, committed
+   (`2104d86`). `Api/AdminApiClient.cs` (typed HttpClient — bearer attachment, typed
+   `AdminApiException` from ProblemDetails, one silent refresh-and-retry on 401, mirroring
+   `palengke_core`'s `ApiClient`), `Auth/AdminAuthenticationStateProvider.cs` (holds the
+   JWT session for the circuit, persists to `ProtectedSessionStorage` so it survives a
+   reload), `Components/Pages/Login.razor` (Admin's first real auth UI — was zero before
+   this). Every other page now carries `@attribute [Authorize]`, enforced by
+   `AuthorizeRouteView` in `Routes.razor`.
+
+   **Two real bugs found only by driving the app in an actual headless-Chromium browser**
+   (Playwright — Blazor Server's interactive SignalR circuit can't be exercised with
+   curl, a plain GET can't see what the client-side router does):
+   - `AuthorizationOptions.FallbackPolicy` makes ASP.NET Core auto-insert the
+     `UseAuthorization()` HTTP middleware, which tries to `Challenge()` *every*
+     unattributed endpoint — including the SignalR circuit endpoint itself — and crashes
+     with no auth scheme registered to challenge with.
+   - Razor Components routing projects each page's own `[Authorize]` attribute onto that
+     route's HTTP endpoint metadata. Even with a scheme wired up so the HTTP-level
+     challenge could redirect instead of crashing, that same check fired on *every*
+     full-page load — including a reload of an already-signed-in tab — bouncing the admin
+     back to `/login` before the circuit ever reconnected and read the persisted session,
+     defeating the entire point of persisting it. Fixed by chaining `.AllowAnonymous()`
+     onto `MapRazorComponents` (`AllowAnonymous` metadata always wins over `Authorize` on
+     the same endpoint) — this keeps the HTTP layer out of the decision entirely; real
+     enforcement is `AuthorizeRouteView`, evaluated only once inside the circuit, after
+     `AdminAuthenticationStateProvider` has had the chance to hydrate from storage.
+
+   **Verified end-to-end in a real headless-Chromium session** against the live API and
+   DB (Playwright installed ad hoc into a scratch temp dir, not added to the repo):
+   unauthenticated `/` redirects to `/login`; wrong credentials show an inline error and
+   leave the form usable; correct credentials land on the dashboard with the admin's
+   email and a Sign out button in the top bar; **a full page reload while signed in stays
+   signed in** (the actual deliverable this task exists for); Sign out returns to
+   `/login` and a subsequent visit is redirected again, confirming the session was really
+   cleared, not just hidden client-side.
 7. **#30 Vendor Leaflet + implement the map JS interop — not started.** **This seam is
    unusually well-prepared, read it before doing anything else in this task**:
    `admin/src/OnlinePalengke.Admin/wwwroot/lib/leaflet/README.md` gives exact pinned
