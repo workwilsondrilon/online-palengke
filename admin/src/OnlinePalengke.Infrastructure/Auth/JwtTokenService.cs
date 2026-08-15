@@ -11,12 +11,11 @@ namespace OnlinePalengke.Infrastructure.Auth;
 
 /// <summary>HMAC-SHA256-signed JWT access tokens.</summary>
 /// <remarks>
-/// Claim shape is deliberately identical to what <c>DevHeaderAuthenticationHandler</c>
-/// produces — both a short <c>"role"</c> claim (what <c>HttpCurrentUser</c> and the
+/// Issues both a short <c>"role"</c> claim (what <c>HttpCurrentUser</c> and the
 /// per-role authorization policies read) and the long-form <see cref="ClaimTypes.Role"/>
 /// (what ASP.NET Core's own <c>[Authorize(Roles = ...)]</c> and <c>User.IsInRole()</c>
-/// expect) — so every policy and every piece of code that reads the current user works
-/// unchanged no matter which of the two schemes actually authenticated the request.
+/// expect), so both this codebase's own policies and any framework code that expects the
+/// standard claim shape work off the same token.
 /// </remarks>
 public sealed class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
 {

@@ -151,9 +151,6 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      # Dev-only header auth stand-in until phone-OTP/JWT lands - see
-      # admin/src/OnlinePalengke.Api/Authentication/DevHeaderAuthenticationHandler.cs.
-      Auth__EnableDevHeaderScheme: "true"
       # mysql:3306, not localhost - containers reach each other by service
       # name on the palengke network, unaffected by the MYSQL_HOST_PORT
       # mapping above (that mapping is only for the host machine).

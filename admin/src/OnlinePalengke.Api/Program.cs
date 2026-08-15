@@ -40,16 +40,9 @@ try
 
     builder.Services.AddOpenApi();
 
-    builder.Services.AddApiAuthentication(builder.Environment, builder.Configuration);
+    builder.Services.AddApiAuthentication(builder.Configuration);
 
     var app = builder.Build();
-
-    if (ApiSetup.IsDevHeaderAuthEnabled(app.Environment, app.Configuration))
-    {
-        Log.Warning(
-            "DEVELOPMENT HEADER AUTHENTICATION IS ENABLED. Any caller can assume any identity by "
-            + "sending X-Dev-User-Id and X-Dev-Role. This must never be enabled outside local development.");
-    }
 
     app.UseExceptionHandler();
     app.UseSerilogRequestLogging();

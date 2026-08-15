@@ -43,20 +43,28 @@ hard way.
   shells, `palengke_core` shared package. 44+ backend unit tests, 22 Flutter tests.
 - **Epic 1 (CI/CD)**: GitHub repo, 3 Actions workflows (path-filtered), S3 buckets
   provisioned and round-trip verified against real AWS.
-- **Epic 2 (Real Identity & Auth)**: phone-OTP + JWT fully implemented and verified live
-  end-to-end (request → verify → authenticated call → refresh → rotate → replay-rejected
-  → signout → idempotent-signout → cross-role-conflict-rejected). Admin email+password
-  login also implemented and verified (correct login, wrong password, nonexistent email
-  all behave correctly, no user-enumeration). `DevHeaderAuthenticationHandler` is **still
-  present and still active** — Epic 2's plan said retiring it is optional until Epic 9,
-  and it now coexists with real JWT auth via a "Smart" policy scheme in `ApiSetup.cs` that
-  forwards to JWT when a Bearer header is present, DevHeader otherwise.
+- **Epic 2 (Real Identity & Auth) — closed.** Phone-OTP + JWT fully implemented and
+  verified live end-to-end (request → verify → authenticated call → refresh → rotate →
+  replay-rejected → signout → idempotent-signout → cross-role-conflict-rejected). Admin
+  email+password login also implemented and verified (correct login, wrong password,
+  nonexistent email all behave correctly, no user-enumeration).
+  `DevHeaderAuthenticationHandler` and its `DenyAllAuthenticationHandler` fallback are
+  **deleted** (not just gated) — `ApiSetup.AddApiAuthentication` now registers JWT Bearer
+  as the API's only scheme, satisfying Epic 2's exit criterion literally. Confirmed live:
+  a request with no bearer token 401s, a request carrying the old
+  `X-Dev-User-Id`/`X-Dev-Role` headers *with no bearer token* also 401s (proving those
+  headers are no longer honored at all, not just less privileged), and a real admin JWT
+  passes auth on the same protected endpoint. `Auth:EnableDevHeaderScheme` is gone from
+  both `appsettings.json` files and from `docker-compose.yml`.
 
-  SMS sending is **stubbed** — `LoggingSmsSender` in Infrastructure logs the OTP code
-  instead of sending a real SMS (this was explicit, requested scope: "Provision OTP for
-  now... no actual OTP sent"). Swap the one DI registration in
-  `OnlinePalengke.Infrastructure/DependencyInjection.cs` for a real Semaphore/Movider
-  adapter later; nothing above `ISmsSender` needs to change.
+  **SMS sending is still stubbed** — `LoggingSmsSender` in Infrastructure logs the OTP
+  code instead of sending a real SMS. This was explicit, requested scope ("Provision OTP
+  for now... no actual OTP sent") and remains a deliberate gap against the plan's literal
+  Epic 2 exit criterion ("a real phone number receives a real OTP... on a device") — swap
+  the one DI registration in `OnlinePalengke.Infrastructure/DependencyInjection.cs` for a
+  real Semaphore/Movider adapter when the user wants to revisit it; nothing above
+  `ISmsSender` needs to change. Needs a provider choice and real API credentials from the
+  user before any session can pick this up — not something to start without that.
 
 ### Two real bugs found and fixed this session (worth knowing about, won't recur but the pattern might)
 
