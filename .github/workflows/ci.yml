@@ -1,0 +1,181 @@
+# =============================================================================
+# PR checks for the whole monorepo.
+#
+# Two independent halves - a .NET job and one Flutter job per app plus the
+# shared package - gated by path filters so a change to one Flutter app
+# doesn't wait on (or fail because of) the other three modules. The one
+# exception is `shared/palengke_core`: every app depends on it, so a change
+# there fans out to ALL THREE app jobs plus its own - never just its own.
+#
+# Runs on pull requests against any branch, and on direct pushes to develop/
+# master, so a granular push straight to develop still gets checked.
+# =============================================================================
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.filter.outputs.dotnet }}
+      core: ${{ steps.filter.outputs.core }}
+      customer: ${{ steps.filter.outputs.customer }}
+      partner: ${{ steps.filter.outputs.partner }}
+      rider: ${{ steps.filter.outputs.rider }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            dotnet:
+              - 'admin/**'
+              - 'Directory.Build.props'
+              - 'OnlinePalengke.slnx'
+              - '.github/workflows/ci.yml'
+            core:
+              - 'shared/palengke_core/**'
+            customer:
+              - 'customer/**'
+            partner:
+              - 'partner/**'
+            rider:
+              - 'rider/**'
+
+  dotnet:
+    name: .NET build, test & migrations
+    needs: changes
+    if: needs.changes.outputs.dotnet == 'true'
+    runs-on: ubuntu-latest
+
+    # A plain MySQL 8.4 service container, matching docker-compose.yml's dev
+    # database as closely as CI allows. This doubles as a check that the
+    # DbUp migration scripts actually apply cleanly - not just that the code
+    # compiles - on every PR that touches the backend.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_pw
+          MYSQL_DATABASE: onlinepalengke
+          MYSQL_USER: palengke
+          MYSQL_PASSWORD: palengke
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci_root_pw --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore OnlinePalengke.slnx
+
+      - name: Build
+        run: dotnet build OnlinePalengke.slnx --no-restore --configuration Release
+
+      - name: Apply migrations against the CI database
+        # PALENGKE_DB_CONNECTION is the documented CI convention - see
+        # README.Database.md. AllowPublicKeyRetrieval/SslMode=None because the
+        # service container has no TLS configured, same as local dev.
+        env:
+          PALENGKE_DB_CONNECTION: "Server=127.0.0.1;Port=3306;Database=onlinepalengke;User ID=palengke;Password=palengke;AllowPublicKeyRetrieval=true;SslMode=None;"
+        run: dotnet run --project admin/src/OnlinePalengke.Migrations --configuration Release
+
+      - name: Test
+        env:
+          PALENGKE_DB_CONNECTION: "Server=127.0.0.1;Port=3306;Database=onlinepalengke;User ID=palengke;Password=palengke;AllowPublicKeyRetrieval=true;SslMode=None;"
+        run: dotnet test OnlinePalengke.slnx --no-build --configuration Release
+
+  flutter-core:
+    name: palengke_core analyze & test
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shared/palengke_core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.8'
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  flutter-customer:
+    name: customer app analyze, test & build
+    needs: changes
+    # Also runs when the shared package changes - it's a dependency of every
+    # app, so a regression there must be caught here, not just in its own job.
+    if: needs.changes.outputs.customer == 'true' || needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: customer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.8'
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --debug
+
+  flutter-partner:
+    name: partner app analyze, test & build
+    needs: changes
+    if: needs.changes.outputs.partner == 'true' || needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: partner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.8'
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --debug
+
+  flutter-rider:
+    name: rider app analyze, test & build
+    needs: changes
+    if: needs.changes.outputs.rider == 'true' || needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rider
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.8'
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --debug
