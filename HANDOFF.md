@@ -97,15 +97,82 @@ An admin can create a market, draw its service polygon and save it; a customer a
 inside it is accepted and one outside is refused with a clear message. Proven end-to-end
 in one continuous run, not just piece by piece — see task #33 below.
 
-## What's next — Epic 4
+## Epic 4 — Onboarding, KYC & Partner Storefront — in progress
 
-**Not started.** Per the plan (`Epic 4 — Onboarding, KYC & Partner Storefront`), this is
-partner/rider onboarding and verification (documents, the admin `Verification.razor`
-placeholder page becoming real) plus the partner app's own storefront-setup flow. A
-fresh session picking this up should read the plan's Epic 4 section first — nothing
-below is a locked decision, just a pointer to where to start. The `.col-2` layout bug
-flagged under Epic 3's #30 is still open (unrelated, doesn't block Epic 4, but worth a
-look if Epic 4 touches `MarketDetail.razor`-adjacent layout patterns).
+Full task breakdown and the detailed design for tasks #34/#35 live in
+`C:\Users\Wilson\.claude\plans\nested-herding-swing.md` — read that file first in a fresh
+session before picking up #36. Summary of what a scouting pass found before any code was
+written, still true and worth knowing:
+
+- **`partners`/`riders` SQL tables already existed** (migration 001, `status` CHECK
+  `pending_kyc/under_review/verified/suspended/rejected`, matching `PartnerStatus`/
+  `RiderStatus` C# enums already in `Domain/Identity/Enums.cs`), but **no C# domain
+  entities, repositories, services, or endpoints existed for Partner/Rider at all** before
+  this epic — OTP verify (`OtpAuthService.VerifyOtpAsync`) only ever inserted a bare
+  `users` row. Registering the `partners`/`riders` profile row is in-scope for this epic.
+- **`MediaAsset`/`MediaPurpose` already anticipated this epic**: `MediaPurpose.KycDocument`
+  and `MediaPurpose.PartnerProduct` already existed with real allowlist policy in
+  `Domain/Media/MediaPurposePolicy.cs`, and the generic presign→PUT→commit flow already
+  worked end-to-end. `IFileStorage.CreateReadUrl` already exists and is the documented
+  mechanism for admin viewing of private KYC documents — no new storage-layer work needed
+  for that.
+- **Flutter side**: `partner/lib/src/` and `rider/lib/src/` are still Epic-0 placeholder
+  shells. `shared/palengke_core`'s `UploadService.uploadImage`/`uploadBytes` already does
+  the full presign→PUT→commit round trip generically — KYC upload screens can call it
+  directly. `customer/lib/src/eligibility/` (api/dtos/page split) is the pattern to mirror.
+- **No `IHostedService`/`BackgroundService` existed anywhere in the codebase.** The daily
+  KYC-expiry job (task #39) will be the first background job in the project.
+
+### Task list (dependency order, numbering continues from Epic 3's #33)
+
+1. **#34 Domain entities & enums** ✅ done, committed (`29be416`). `Partner`, `Rider`
+   (`Domain/Identity/`), `DocumentType`, `KycDocument`, `KycDocumentStatus`
+   (`Domain/Kyc/`), `PartnerProduct` (`Domain/Media/`), `ContentReport`,
+   `ContentTargetType`, `ContentReportStatus` (`Domain/Moderation/`). **Deliberately plain
+   data** — required init-only properties, no domain methods/guards — matching
+   `Category`/`Item`/`Market`'s established convention (confirmed by reading them first)
+   rather than `MediaAsset`'s one-off guarded-mutation style. All transition logic (status
+   guards, the "latest submission per owner+type" resubmission rule) is Application-layer
+   scope, task #36, not yet written.
+2. **#35 Migration 004** ✅ done, committed (`44b0856`), applied to the local DB (native
+   MySQL, not Docker) and verified. `admin/src/OnlinePalengke.Migrations/Scripts/004_kyc_and_storefront.sql`
+   — `document_types`, `kyc_documents`, `partner_products`, `content_reports`, following
+   every convention in `README.Database.md` §4 (VARCHAR + named CHECK, not ENUM;
+   `BIGINT UNSIGNED`; `DATETIME(6)` written explicitly, no `ON UPDATE CURRENT_TIMESTAMP`).
+   Seeds the six role-wide `document_types` rows from the plan (valid ID, business permit,
+   barangay clearance for partners; driver's licence, OR/CR, NBI clearance for riders).
+   **The two category-scoped rows (sanitary permit, health card for Meat/Poultry/Fish)
+   correctly inserted zero rows** on the current local DB — confirmed deliberately: Epic
+   3's own verification sessions always cleaned up their test categories afterward, so
+   `categories` is empty right now. The migration's `INSERT ... SELECT ... WHERE name IN
+   (...)` is written to no-op rather than hard-fail when that happens; re-run is safe once
+   real categories exist. Verified: all four tables created, 6/6 seed rows present, a
+   second run of the migration runner is a correct no-op, full solution (`dotnet build
+   OnlinePalengke.slnx`) builds with 0 warnings/errors, all 53 existing unit tests still
+   pass.
+3. **#36 Application layer** — not started. `IPartnerRepository`, `IRiderRepository`,
+   `IDocumentTypeRepository`, `IKycDocumentRepository`, `IPartnerProductRepository`,
+   `IContentReportRepository` abstractions; `PartnerService`/`RiderService` (registration),
+   `DocumentTypeService` (admin CRUD), `KycDocumentService` (submit, review queue,
+   approve/reject, the verified-derivation rule), `PartnerProductService`,
+   `ContentModerationService`. See the plan file for full detail on each.
+4. **#37 Infrastructure** — not started. Dapper repos for #36's abstractions.
+5. **#38 Api endpoints** — not started. Registration, document-types CRUD, KYC submit/
+   review/approve/reject, partner-products CRUD+publish, content moderation.
+6. **#39 Daily background job** — not started. First `BackgroundService` in the project:
+   KYC expiry warnings (30/7 days) and suspension on lapse.
+7. **#40 Admin UI** — not started. `DocumentTypes.razor`, wire `Verification.razor` to
+   real data, a content-moderation page.
+8. **#41 Partner Flutter app** — not started. Registration, KYC document screens, product
+   declaration screen.
+9. **#42 Rider Flutter app** — not started. Registration, KYC document screens (factor a
+   shared widget into `palengke_core` if #41 and #42 turn out near-identical).
+10. **#43 End-to-end verification** — not started. The literal exit criterion: a stall
+    registers, submits KYC, is rejected, resubmits, is approved, `verified` fires.
+
+The `.col-2` CSS grid layout bug flagged under Epic 3's #30 is still open (unrelated,
+doesn't block Epic 4, but worth a look if Epic 4 touches `MarketDetail.razor`-adjacent
+layout patterns).
 
 ### Epic 3 scope (from the plan)
 
