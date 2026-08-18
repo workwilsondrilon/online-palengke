@@ -150,12 +150,47 @@ written, still true and worth knowing:
    second run of the migration runner is a correct no-op, full solution (`dotnet build
    OnlinePalengke.slnx`) builds with 0 warnings/errors, all 53 existing unit tests still
    pass.
-3. **#36 Application layer** — not started. `IPartnerRepository`, `IRiderRepository`,
-   `IDocumentTypeRepository`, `IKycDocumentRepository`, `IPartnerProductRepository`,
-   `IContentReportRepository` abstractions; `PartnerService`/`RiderService` (registration),
-   `DocumentTypeService` (admin CRUD), `KycDocumentService` (submit, review queue,
-   approve/reject, the verified-derivation rule), `PartnerProductService`,
-   `ContentModerationService`. See the plan file for full detail on each.
+3. **#36 Application layer** ✅ done, committed (`d06af00`). Six repository interfaces
+   (`IPartnerRepository`, `IRiderRepository`, `IDocumentTypeRepository`,
+   `IKycDocumentRepository`, `IPartnerProductRepository`, `IContentReportRepository`) and
+   five services: `PartnerService`/`RiderService` (`Application/Onboarding/`),
+   `DocumentTypeService`/`KycDocumentService` (`Application/Kyc/`),
+   `PartnerProductService` (`Application/Storefront/`), `ContentModerationService`
+   (`Application/Moderation/`). Notable design points:
+   - `Partner`/`Rider` carry no domain methods (confirmed by reading #34's actual output,
+     not a plan sketch — they're plain data like `Category`/`Item`/`Market`), so every
+     status change is a full-row reconstruction (`new Partner { ... }`) followed by a
+     repository `UpdateAsync`, never a mutation.
+   - **Resubmission-preserves-history is real**: `KycDocumentService.SubmitAsync` always
+     inserts a new `KycDocument` row rather than touching a rejected one, so "the current
+     state of a requirement" is always "the latest row for that owner+document-type",
+     recomputed fresh, never tracked as running state anywhere.
+   - **The verified-derivation rule** lives in `KycDocumentService.EvaluateVerificationAsync`,
+     called after every approval: pulls every `IsRequired` document type for the owner's
+     role (and, for a partner, their `CategoryId`) via `IDocumentTypeRepository.ListForRoleAsync`,
+     checks each has an `Approved` + unexpired latest submission, and only then promotes to
+     `Verified` — it never demotes; a lapse is `KycDocumentService.ExpireAsync`'s job
+     (built now, ready for task #39's background job to call, not left as a stub).
+   - First submission promotes `PendingKyc → UnderReview`
+     (`PartnerService.MarkUnderReviewIfPendingAsync`), but a later resubmission on an
+     already-verified owner does not disturb their status — the method is named
+     "IfPending" specifically because this distinction matters and is easy to get wrong.
+   - `KycDocument.OwnerId` is the **partner/rider profile id**, not the `users.id` — every
+     self-service method resolves "my profile" via `IPartnerRepository.GetByUserIdAsync(currentUser.UserId)`
+     first, matching how `ICurrentUser` exposes no partner/rider id directly.
+   - `PartnerProductService` publishes on save (decision 18, no pre-approval);
+     `ContentModerationService.TakeDownAsync` unpublishes through `PartnerProductService`'s
+     own path rather than a separate deletion mechanism.
+
+   **Pure Application layer — cannot be exercised end to end yet** (no Infrastructure
+   implementations for the six new repositories, task #37; no Api endpoints, task #38).
+   Verified by build only, both delegated to a subagent per this session's working
+   pattern: `OnlinePalengke.Application` builds standalone (references only `Domain`), the
+   full solution builds clean, all 53 existing unit tests still pass. A second subagent
+   pass cross-checked every new file against `CategoryService`/`ItemService`/`MarketService`'s
+   established conventions (exception constructors, the `ParseStatus`-style enum-parsing
+   idiom, `Naming.ToDbValue` usage, the `IsForeignKeyViolation` reuse, and a DI-cycle check
+   across all five new services) — no inconsistencies found.
 4. **#37 Infrastructure** — not started. Dapper repos for #36's abstractions.
 5. **#38 Api endpoints** — not started. Registration, document-types CRUD, KYC submit/
    review/approve/reject, partner-products CRUD+publish, content moderation.
