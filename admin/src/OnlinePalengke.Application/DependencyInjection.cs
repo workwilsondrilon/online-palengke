@@ -1,7 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using OnlinePalengke.Application.Auth;
 using OnlinePalengke.Application.Catalog;
+using OnlinePalengke.Application.Kyc;
 using OnlinePalengke.Application.Markets;
+using OnlinePalengke.Application.Moderation;
+using OnlinePalengke.Application.Onboarding;
+using OnlinePalengke.Application.Storefront;
 using OnlinePalengke.Application.Uploads;
 
 namespace OnlinePalengke.Application;
@@ -30,6 +34,13 @@ public static class DependencyInjection
         services.AddScoped<MarketService>();
         services.AddScoped<DeliveryWindowService>();
         services.AddScoped<MarketEligibilityService>();
+
+        services.AddScoped<PartnerService>();
+        services.AddScoped<RiderService>();
+        services.AddScoped<DocumentTypeService>();
+        services.AddScoped<KycDocumentService>();
+        services.AddScoped<PartnerProductService>();
+        services.AddScoped<ContentModerationService>();
 
         return services;
     }
